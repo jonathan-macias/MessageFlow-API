@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/MessageFlow.Api/MessageFlow.Api.csproj" />
+    <Project Path="src/MessageFlow.Application/MessageFlow.Application.csproj" />
+    <Project Path="src/MessageFlow.Domain/MessageFlow.Domain.csproj" />
+    <Project Path="src/MessageFlow.Infrastructure/MessageFlow.Infrastructure.csproj" />
+    <Project Path="src/MessageFlow.Tests/MessageFlow.Tests.csproj" />
+  </Folder>
+</Solution>
