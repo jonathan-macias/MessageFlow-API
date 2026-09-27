@@ -27,4 +27,16 @@
     <ProjectReference Include="..\MessageFlow.Api\MessageFlow.Api.csproj" />
   </ItemGroup>
 
+  <!-- El appsettings real se copia a la salida de los tests para poder verificar que la
+       configuración que se despliega sigue enlazando con las clases de opciones. Un test
+       que usa un appsettings de mentira no detectaría una clave renombrada. -->
+  <ItemGroup>
+    <None Include="..\MessageFlow.Api\appsettings.json" Link="api-appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\MessageFlow.Api\appsettings.example.json" Link="api-appsettings.example.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>

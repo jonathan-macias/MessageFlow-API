@@ -6,6 +6,8 @@ using MessageFlow.Domain.Enums;
 using MessageFlow.Domain.Flows;
 using MessageFlow.Domain.Messaging;
 using System.Runtime.CompilerServices;
+using GroundedFilter = MessageFlow.Domain.AI.GroundedFilter;
+using GroundedRow = MessageFlow.Domain.AI.GroundedRow;
 
 namespace MessageFlow.Tests.TestSupport;
 
@@ -105,6 +107,16 @@ public sealed class FakeDatasetRepository : IDatasetRepository
 
     public Task<DatasetRow?> FindRowAsync(Guid datasetId, Guid rowId, CancellationToken cancellationToken = default)
         => throw new NotSupportedException();
+
+    public Task<IReadOnlyList<DatasetRow>> GetRowsByIdsAsync(
+        Guid datasetId,
+        IReadOnlyCollection<Guid> rowIds,
+        CancellationToken cancellationToken = default)
+    {
+        var wanted = rowIds.ToHashSet();
+        return Task.FromResult<IReadOnlyList<DatasetRow>>(
+            _rows.Where(r => r.DatasetId == datasetId && wanted.Contains(r.Id)).ToList());
+    }
 
     public Task AddRowsAsync(IEnumerable<DatasetRow> rows, CancellationToken cancellationToken = default)
     {
@@ -301,5 +313,176 @@ public sealed class FakeGoogleTokenValidator : IGoogleTokenValidator
         }
 
         return Task.FromResult(ValidUser);
+    }
+}
+
+/// <summary>
+/// IDatasetEmbeddingRepository de prueba. Reproduce la búsqueda como el repositorio real
+/// (acotada al dataset, ordenada por similitud) para que los tests del handler no
+/// dependan de PostgreSQL.
+/// </summary>
+public sealed class FakeEmbeddingRepository : IDatasetEmbeddingRepository
+{
+    private readonly List<DatasetRowEmbedding> _embeddings = [];
+    private readonly Dictionary<Guid, DatasetEmbeddingState> _states = [];
+
+    /// <summary>Candidatos que devuelve la búsqueda, si se fija explícitamente.</summary>
+    public List<ScoredDatasetRow> SearchResults { get; set; } = [];
+
+    public List<DatasetRowEmbedding> Embeddings => _embeddings;
+
+    /// <summary>
+    /// Estado del dataset, creado si no existe. Permite que el test lleve la máquina de
+    /// estados al punto de partida que necesita (fallido, en curso) sin cablear el
+    /// repositorio entero.
+    /// </summary>
+    public DatasetEmbeddingState StateFor(Guid datasetId)
+    {
+        if (!_states.TryGetValue(datasetId, out var state))
+        {
+            state = new DatasetEmbeddingState(datasetId, DatasetRowEmbedding.VectorDimensions);
+            _states[datasetId] = state;
+        }
+
+        return state;
+    }
+
+    public Task<DatasetEmbeddingState?> FindStateAsync(Guid datasetId, CancellationToken cancellationToken = default)
+        => Task.FromResult(_states.GetValueOrDefault(datasetId));
+
+    public Task AddStateAsync(DatasetEmbeddingState state, CancellationToken cancellationToken = default)
+    {
+        _states[state.DatasetId] = state;
+        return Task.CompletedTask;
+    }
+
+    public Task<IReadOnlyList<Guid>> ListDatasetsPendingIndexingAsync(CancellationToken cancellationToken = default)
+        => Task.FromResult<IReadOnlyList<Guid>>([.. _states.Values.Select(s => s.DatasetId)]);
+
+    public Task AddRangeAsync(IReadOnlyList<DatasetRowEmbedding> embeddings, CancellationToken cancellationToken = default)
+    {
+        _embeddings.AddRange(embeddings);
+        return Task.CompletedTask;
+    }
+
+    public Task<IReadOnlyList<ScoredDatasetRow>> SearchSimilarAsync(
+        Guid datasetId,
+        float[] queryVector,
+        int limit,
+        CancellationToken cancellationToken = default)
+        => Task.FromResult<IReadOnlyList<ScoredDatasetRow>>([.. SearchResults.Take(limit)]);
+
+    public Task<long> CountAsync(Guid datasetId, CancellationToken cancellationToken = default)
+        => Task.FromResult((long)_embeddings.Count(e => e.DatasetId == datasetId));
+
+    public Task DeleteByDatasetAsync(Guid datasetId, CancellationToken cancellationToken = default)
+    {
+        _embeddings.RemoveAll(e => e.DatasetId == datasetId);
+        _states.Remove(datasetId);
+        return Task.CompletedTask;
+    }
+}
+
+/// <summary>
+/// IEmbeddingService de prueba. Devuelve un vector con un 1 en la posición derivada del
+/// texto, de modo que dos textos distintos producen vectores distintos y comparables.
+/// </summary>
+public sealed class FakeEmbeddingService : IEmbeddingService
+{
+    public int Dimensions { get; init; } = DatasetRowEmbedding.VectorDimensions;
+
+    /// <summary>Textos vectorizados, en orden, para poder verificar el propósito usado.</summary>
+    public List<(string Text, EmbeddingPurpose Purpose)> Calls { get; } = [];
+
+    /// <summary>Si se fija, la siguiente llamada a GenerateEmbeddingAsync falla con este error.</summary>
+    public Exception? QueryFailure { get; set; }
+
+    public Task<float[]> GenerateEmbeddingAsync(
+        string text,
+        EmbeddingPurpose purpose,
+        CancellationToken cancellationToken = default)
+    {
+        Calls.Add((text, purpose));
+
+        if (QueryFailure is not null)
+        {
+            throw QueryFailure;
+        }
+
+        return Task.FromResult(DeterministicVector(text));
+    }
+
+    public Task<IReadOnlyList<float[]>> GenerateBatchAsync(
+        IReadOnlyList<string> texts,
+        EmbeddingPurpose purpose,
+        CancellationToken cancellationToken = default)
+    {
+        foreach (var text in texts)
+        {
+            Calls.Add((text, purpose));
+        }
+
+        return Task.FromResult<IReadOnlyList<float[]>>([.. texts.Select(DeterministicVector)]);
+    }
+
+    private static float[] DeterministicVector(string text)
+    {
+        var vector = new float[DatasetRowEmbedding.VectorDimensions];
+        var hash = (uint)StringComparer.Ordinal.GetHashCode(text);
+        vector[hash % DatasetRowEmbedding.VectorDimensions] = 1f;
+        return vector;
+    }
+}
+
+/// <summary>
+/// IGenerativeAIService de prueba. Graba la evidencia recibida para poder verificar que la
+/// respuesta se redactó solo con las filas recuperadas.
+/// </summary>
+public sealed class FakeGenerativeAIService : IGenerativeAIService
+{
+    public string GroundedAnswer { get; set; } = "respuesta fundamentada";
+
+    public List<GroundedRow> LastGroundedRows { get; } = [];
+
+    public List<GroundedFilter> LastGroundedFilters { get; } = [];
+
+    public string? LastGroundedQuestion { get; private set; }
+
+    public int GroundedCallCount { get; private set; }
+
+    public Task<GeneratedMessageResult> GenerateMessageAsync(
+        string description,
+        string tone,
+        IReadOnlyList<ColumnDefinition> columns,
+        CancellationToken cancellationToken = default)
+        => throw new NotSupportedException();
+
+    public Task<Domain.AI.DatasetQuery> GenerateDatasetQueryAsync(
+        string question,
+        IReadOnlyList<ColumnDefinition> columns,
+        CancellationToken cancellationToken = default)
+        => throw new NotSupportedException();
+
+    public Task<string> GenerateResponseAsync(
+        string originalQuestion,
+        Domain.AI.DatasetQuery query,
+        object? queryData,
+        CancellationToken cancellationToken = default)
+        => throw new NotSupportedException();
+
+    public Task<string> GenerateGroundedResponseAsync(
+        string question,
+        IReadOnlyList<GroundedRow> rows,
+        IReadOnlyList<GroundedFilter> appliedFilters,
+        CancellationToken cancellationToken = default)
+    {
+        LastGroundedQuestion = question;
+        LastGroundedRows.Clear();
+        LastGroundedRows.AddRange(rows);
+        LastGroundedFilters.Clear();
+        LastGroundedFilters.AddRange(appliedFilters);
+        GroundedCallCount++;
+
+        return Task.FromResult(GroundedAnswer);
     }
 }

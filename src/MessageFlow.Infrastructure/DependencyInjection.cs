@@ -2,8 +2,10 @@ using MessageFlow.Application.Abstractions;
 using MessageFlow.Application.Abstractions.Execution;
 using MessageFlow.Application.Abstractions.Files;
 using MessageFlow.Application.Abstractions.Persistence;
+using MessageFlow.Application.AI;
 using MessageFlow.Application.Auth;
 using MessageFlow.Application.Datasets;
+using MessageFlow.Domain.Datasets;
 using MessageFlow.Domain.Messaging;
 using MessageFlow.Infrastructure.AI;
 using MessageFlow.Infrastructure.CurrentUser;
@@ -17,6 +19,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Pgvector.EntityFrameworkCore;
 
 namespace MessageFlow.Infrastructure;
 
@@ -45,6 +48,12 @@ public static class DependencyInjection
         services.AddHttpClient<IGenerativeAIService, GeminiService>(client =>
         {
             client.Timeout = TimeSpan.FromSeconds(60);
+        });
+
+        // AI semantic search (RAG): same provider, embeddings endpoint.
+        services.AddHttpClient<IEmbeddingService, GeminiEmbeddingService>(client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(120);
         });
 
         // ICurrentUser: resuelve dinámicamente según contexto.
@@ -85,18 +94,29 @@ public static class DependencyInjection
         services.AddDbContext<MessageFlowDbContext>((serviceProvider, options) =>
         {
             options.UseNpgsql(connectionString, npgsqlOptions =>
-                npgsqlOptions.MigrationsAssembly(typeof(DependencyInjection).Assembly.FullName));
+            {
+                npgsqlOptions.MigrationsAssembly(typeof(DependencyInjection).Assembly.FullName);
+
+                // Habilita el mapeo float[] <-> vector(n) que usa pgvector.
+                npgsqlOptions.UseVector();
+            });
             options.AddInterceptors(serviceProvider.GetRequiredService<AuditSaveChangesInterceptor>());
         });
 
         services.AddScoped<IUnitOfWork>(serviceProvider => serviceProvider.GetRequiredService<MessageFlowDbContext>());
         services.AddScoped<IFlowRepository, FlowRepository>();
         services.AddScoped<IDatasetRepository, DatasetRepository>();
+        services.AddScoped<IDatasetEmbeddingRepository, DatasetEmbeddingRepository>();
         services.AddScoped<IFlowExecutionRepository, FlowExecutionRepository>();
 
         // Scheduler en background (Fase 8).
         services.AddSingleton(new FlowSchedulingOptions());
         services.AddHostedService<FlowSchedulerWorker>();
+
+        // Indexado de embeddings en background. Siempre se registra; si está
+        // deshabilitado o falta la API key, el worker no hace nada.
+        services.AddSingleton(new EmbeddingIndexingOptions());
+        services.AddHostedService<DatasetEmbeddingWorker>();
 
         return services;
     }

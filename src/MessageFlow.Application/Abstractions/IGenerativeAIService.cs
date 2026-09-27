@@ -34,6 +34,17 @@ public interface IGenerativeAIService
         DatasetQuery query,
         object? queryData,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Answers a question using ONLY the rows retrieved by semantic search (RAG).
+    /// The model must treat <paramref name="rows"/> as the only admissible evidence and
+    /// say so when they do not answer the question, instead of filling the gap from memory.
+    /// </summary>
+    Task<string> GenerateGroundedResponseAsync(
+        string question,
+        IReadOnlyList<GroundedRow> rows,
+        IReadOnlyList<GroundedFilter> appliedFilters,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>

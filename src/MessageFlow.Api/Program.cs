@@ -2,6 +2,7 @@ using System.Text;
 using MessageFlow.Api.Middleware;
 using MessageFlow.Application;
 using MessageFlow.Application.Abstractions.Execution;
+using MessageFlow.Application.AI;
 using MessageFlow.Infrastructure;
 using MessageFlow.Infrastructure.AI;
 using MessageFlow.Infrastructure.Messaging;
@@ -31,9 +32,31 @@ builder.Services.AddSingleton(
     ?? throw new InvalidOperationException("Falta la sección 'EvolutionApi' en la configuración."));
 
 // Gemini AI service configuration.
-builder.Services.AddSingleton(
-    builder.Configuration.GetSection(GeminiOptions.SectionName).Get<GeminiOptions>()
-    ?? new GeminiOptions());
+var geminiOptions = builder.Configuration.GetSection(GeminiOptions.SectionName).Get<GeminiOptions>()
+    ?? new GeminiOptions();
+
+// Búsqueda semántica: límites de consulta y ritmo del worker de indexado.
+var semanticSearchOptions = builder.Configuration
+    .GetSection(SemanticSearchOptions.SectionName)
+    .Get<SemanticSearchOptions>() ?? new SemanticSearchOptions();
+
+var embeddingIndexingOptions = builder.Configuration
+    .GetSection($"{SemanticSearchOptions.SectionName}:Indexing")
+    .Get<EmbeddingIndexingOptions>() ?? new EmbeddingIndexingOptions();
+
+if (semanticSearchOptions.Enabled)
+{
+    // Falla al arrancar, y no con un error 500 en la primera consulta, si la
+    // configuración no tiene sentido o no coincide con el ancho de la columna vector.
+    semanticSearchOptions.Validate();
+    embeddingIndexingOptions.Validate();
+    geminiOptions.Validate();
+}
+
+// La re-registración sustituye los valores por defecto registrados por Application/Infrastructure.
+builder.Services.AddSingleton(geminiOptions);
+builder.Services.AddSingleton(semanticSearchOptions);
+builder.Services.AddSingleton(embeddingIndexingOptions);
 
 // ── Autenticación (JWT + Google) ──────────────────────────────────────────────
 var jwtSecret = builder.Configuration["Jwt:Secret"]

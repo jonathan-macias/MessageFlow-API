@@ -16,7 +16,10 @@ namespace MessageFlow.Tests.Integration;
 /// </summary>
 public sealed class PostgresDatabaseFixture : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _container = new PostgreSqlBuilder("postgres:18-alpine")
+    // La imagen oficial de postgres no trae pgvector: sin la extensión, la migración que
+    // crea las tablas de embeddings falla y los tests de integración de búsqueda vectorial
+    // no podrían ejecutarse. pgvector/pgvector:pg18 es PostgreSQL 18 con la extensión.
+    private readonly PostgreSqlContainer _container = new PostgreSqlBuilder("pgvector/pgvector:pg18")
         .WithDatabase("messageflow_test")
         .WithUsername("postgres")
         .WithPassword("postgres")

@@ -6,6 +6,9 @@ using MessageFlow.Infrastructure.Users;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure;
+using Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure.Internal;
+using Pgvector.EntityFrameworkCore;
 
 namespace MessageFlow.Infrastructure.Persistence;
 
@@ -23,6 +26,8 @@ public sealed class MessageFlowDbContext(DbContextOptions<MessageFlowDbContext> 
     public DbSet<Dataset> Datasets => Set<Dataset>();
     public DbSet<DatasetColumn> DatasetColumns => Set<DatasetColumn>();
     public DbSet<DatasetRow> DatasetRows => Set<DatasetRow>();
+    public DbSet<DatasetRowEmbedding> DatasetRowEmbeddings => Set<DatasetRowEmbedding>();
+    public DbSet<DatasetEmbeddingState> DatasetEmbeddingStates => Set<DatasetEmbeddingState>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -31,6 +36,10 @@ public sealed class MessageFlowDbContext(DbContextOptions<MessageFlowDbContext> 
 
         // Dominio: crea las tablas flows, datasets, etc.
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(FlowConfiguration).Assembly);
+
+        // Extensión de PostgreSQL que provee el tipo 'vector' y los operadores de
+        // distancia. EF la crea en la migración si el usuario tiene permisos.
+        modelBuilder.HasPostgresExtension("vector");
 
         // Seed de roles por defecto (Admin y User). Se aplican siempre:
         // si la tabla ya tiene datos, EF ignora los duplicados.
@@ -55,4 +64,16 @@ public sealed class MessageFlowDbContext(DbContextOptions<MessageFlowDbContext> 
     }
 
     public void ClearTrackedEntities() => ChangeTracker.Clear();
+
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
+        // UseVector() es lo que habilita el mapeo float[] <-> vector(n). Se aplica aquí, y
+        // no solo en el registro de DI, para que un DbContext construido directamente (tests
+        // de integración, design-time de EF) no pueda quedarse sin el mapeo y fallar con un
+        // error de modelo confuso. Es idempotente, así que convive con la llamada de DI.
+        //
+        // No se comprueba el proveedor: MessageFlow es Npgsql-only, y para distinguirlo
+        // había que tocar NpgsqlOptionsExtension, que es internal de Npgsql (EF1001).
+        new NpgsqlDbContextOptionsBuilder(optionsBuilder).UseVector();
+    }
 }

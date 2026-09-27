@@ -96,6 +96,23 @@ public sealed class DatasetRepository(MessageFlowDbContext context, ICurrentUser
     public Task<DatasetRow?> FindRowAsync(Guid datasetId, Guid rowId, CancellationToken cancellationToken = default)
         => context.DatasetRows.FirstOrDefaultAsync(r => r.DatasetId == datasetId && r.Id == rowId, cancellationToken);
 
+    public async Task<IReadOnlyList<DatasetRow>> GetRowsByIdsAsync(
+        Guid datasetId,
+        IReadOnlyCollection<Guid> rowIds,
+        CancellationToken cancellationToken = default)
+    {
+        if (rowIds.Count == 0)
+        {
+            return [];
+        }
+
+        return await context.DatasetRows
+            .AsNoTracking()
+            .Where(r => r.DatasetId == datasetId && rowIds.Contains(r.Id))
+            .OrderBy(r => r.RowNumber)
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task AddRowsAsync(IEnumerable<DatasetRow> rows, CancellationToken cancellationToken = default)
         => await context.DatasetRows.AddRangeAsync(rows, cancellationToken);
 

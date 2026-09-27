@@ -49,6 +49,12 @@ dotnet ef database update \
   --project ./MessageFlow.Infrastructure \
   --startup-project ./MessageFlow.Api \
   --connection "Host=YOUR_HOST;Port=5432;Database=messageflow;Username=YOUR_USER;Password=YOUR_PASSWORD"
+
+CREATE EXTENSION vector;
+
+SELECT extname, extversion
+FROM pg_extension
+WHERE extname = 'vector';
 ```
 
 ### 2. Configuration

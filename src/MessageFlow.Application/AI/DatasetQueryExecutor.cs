@@ -252,90 +252,12 @@ public sealed class DatasetQueryExecutor(
 
         await foreach (var row in rows.WithCancellation(cancellationToken))
         {
-            if (EvaluateFilters(row.Values, filters, columnDict))
+            if (DatasetRowFilterEvaluator.Matches(row.Values, filters, columnDict))
             {
                 result.Add(row);
             }
         }
 
         return result;
-    }
-
-    private static bool EvaluateFilters(
-        IReadOnlyDictionary<string, string?> rowValues,
-        IReadOnlyList<DatasetQueryFilter> filters,
-        Dictionary<string, Domain.Datasets.ColumnDefinition> columnDict)
-    {
-        if (filters.Count == 0)
-        {
-            return true;
-        }
-
-        return filters.All(filter => EvaluateFilter(rowValues, filter, columnDict));
-    }
-
-    private static bool EvaluateFilter(
-        IReadOnlyDictionary<string, string?> rowValues,
-        DatasetQueryFilter filter,
-        Dictionary<string, Domain.Datasets.ColumnDefinition> columnDict)
-    {
-        if (!columnDict.TryGetValue(filter.Column, out var column))
-        {
-            return false;
-        }
-
-        rowValues.TryGetValue(filter.Column, out var cellValue);
-
-        return filter.Operator switch
-        {
-            DatasetQueryOperator.Equals => string.Equals(cellValue, filter.Value, StringComparison.OrdinalIgnoreCase),
-            DatasetQueryOperator.NotEquals => !string.Equals(cellValue, filter.Value, StringComparison.OrdinalIgnoreCase),
-            DatasetQueryOperator.Contains => cellValue?.Contains(filter.Value ?? string.Empty, StringComparison.OrdinalIgnoreCase) ?? false,
-            DatasetQueryOperator.GreaterThan => CompareValues(cellValue, filter.Value, column.DataType) > 0,
-            DatasetQueryOperator.GreaterThanOrEqual => CompareValues(cellValue, filter.Value, column.DataType) >= 0,
-            DatasetQueryOperator.LessThan => CompareValues(cellValue, filter.Value, column.DataType) < 0,
-            DatasetQueryOperator.LessThanOrEqual => CompareValues(cellValue, filter.Value, column.DataType) <= 0,
-            DatasetQueryOperator.IsNull => string.IsNullOrWhiteSpace(cellValue),
-            DatasetQueryOperator.IsNotNull => !string.IsNullOrWhiteSpace(cellValue),
-            _ => false
-        };
-    }
-
-    private static int CompareValues(string? cellValue, string? expectedValue, ColumnDataType dataType)
-    {
-        if (string.IsNullOrWhiteSpace(cellValue) || string.IsNullOrWhiteSpace(expectedValue))
-        {
-            return string.IsNullOrWhiteSpace(cellValue) ? (string.IsNullOrWhiteSpace(expectedValue) ? 0 : -1) : 1;
-        }
-
-        return dataType switch
-        {
-            ColumnDataType.Number => CompareNumbers(cellValue, expectedValue),
-            ColumnDataType.Date => CompareDates(cellValue, expectedValue),
-            ColumnDataType.Text => string.Compare(cellValue, expectedValue, StringComparison.OrdinalIgnoreCase),
-            _ => string.Compare(cellValue, expectedValue, StringComparison.OrdinalIgnoreCase)
-        };
-    }
-
-    private static int CompareNumbers(string cell, string expected)
-    {
-        if (double.TryParse(cell, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var cellNum) &&
-            double.TryParse(expected, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var expectedNum))
-        {
-            return cellNum.CompareTo(expectedNum);
-        }
-
-        return string.Compare(cell, expected, StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static int CompareDates(string cell, string expected)
-    {
-        if (DateTime.TryParse(cell, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var cellDate) &&
-            DateTime.TryParse(expected, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var expectedDate))
-        {
-            return cellDate.CompareTo(expectedDate);
-        }
-
-        return string.Compare(cell, expected, StringComparison.OrdinalIgnoreCase);
     }
 }

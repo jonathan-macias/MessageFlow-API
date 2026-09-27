@@ -11,6 +11,13 @@
     <ProjectReference Include="..\MessageFlow.Domain\MessageFlow.Domain.csproj" />
   </ItemGroup>
 
+  <!-- Permite a los tests cubrir lógica interna con aritmética propia (por ejemplo el
+       cálculo de candidatos vectoriales y el parseo de operadores), que si quedara
+       privada se verificaría solo de forma indirecta a través del handler. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="MessageFlow.Tests" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>

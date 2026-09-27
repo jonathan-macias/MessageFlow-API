@@ -13,6 +13,8 @@ namespace MessageFlow.Infrastructure.AI;
 
 /// <summary>
 /// Gemini API configuration. Bound from appsettings.json "Gemini" section.
+/// Nothing is defaulted to a concrete model: if the section is missing, the service
+/// fails with an explicit message instead of silently calling a hardcoded model.
 /// </summary>
 public sealed class GeminiOptions
 {
@@ -21,8 +23,48 @@ public sealed class GeminiOptions
     /// <summary>Gemini API key. Never exposed to frontend.</summary>
     public string ApiKey { get; set; } = string.Empty;
 
-    /// <summary>Gemini model to use (e.g., "gemini-2.5-flash-lite"). Configurable without code changes.</summary>
-    public string Model { get; set; } = "gemini-2.5-flash-lite";
+    /// <summary>
+    /// Generative model for text (e.g., "gemini-3.5-flash-lite").
+    /// Configurable without code changes.
+    /// </summary>
+    public string Model { get; set; } = string.Empty;
+
+    /// <summary>Embedding model for semantic search (e.g., "gemini-embedding-001").</summary>
+    public string EmbeddingModel { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Width of the embedding vector. Must match the database column
+    /// <c>vector(n)</c>; validated at startup against
+    /// <see cref="MessageFlow.Domain.Datasets.DatasetRowEmbedding.VectorDimensions"/>.
+    /// </summary>
+    public int EmbeddingDimensions { get; set; }
+
+    /// <summary>Fails fast when the generative or embedding model is missing.</summary>
+    public void Validate()
+    {
+        if (string.IsNullOrWhiteSpace(ApiKey))
+        {
+            throw new InvalidOperationException("Falta la configuración 'Gemini:ApiKey'.");
+        }
+
+        if (string.IsNullOrWhiteSpace(Model))
+        {
+            throw new InvalidOperationException("Falta la configuración 'Gemini:Model'.");
+        }
+
+        if (string.IsNullOrWhiteSpace(EmbeddingModel))
+        {
+            throw new InvalidOperationException("Falta la configuración 'Gemini:EmbeddingModel'.");
+        }
+
+        if (EmbeddingDimensions != MessageFlow.Domain.Datasets.DatasetRowEmbedding.VectorDimensions)
+        {
+            throw new InvalidOperationException(
+                $"'Gemini:EmbeddingDimensions' es {EmbeddingDimensions} pero la columna del vector es " +
+                $"vector({MessageFlow.Domain.Datasets.DatasetRowEmbedding.VectorDimensions}). " +
+                "Cambiar el ancho exige una migración nueva y reindexar todos los datasets.");
+        }
+    }
 }
 
 /// <summary>
@@ -36,16 +78,30 @@ public sealed class GeminiService(
 {
     private const int TimeoutSeconds = 60;
 
+    /// <summary>
+    /// Falla con un mensaje claro si la configuración quedó incompleta, en lugar de
+    /// construir una URL con el modelo vacío y devolver un 404 confuso de Google.
+    /// </summary>
+    private void EnsureConfigured()
+    {
+        if (string.IsNullOrWhiteSpace(options.ApiKey))
+        {
+            throw new DomainException("Gemini API key is not configured.");
+        }
+
+        if (string.IsNullOrWhiteSpace(options.Model))
+        {
+            throw new DomainException("Gemini model is not configured.");
+        }
+    }
+
     public async Task<GeneratedMessageResult> GenerateMessageAsync(
         string description,
         string tone,
         IReadOnlyList<ColumnDefinition> columns,
         CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(options.ApiKey))
-        {
-            throw new DomainException("Gemini API key is not configured.");
-        }
+        EnsureConfigured();
 
         if (columns.Count == 0)
         {
@@ -265,10 +321,7 @@ public sealed class GeminiService(
         IReadOnlyList<ColumnDefinition> columns,
         CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(options.ApiKey))
-        {
-            throw new DomainException("Gemini API key is not configured.");
-        }
+        EnsureConfigured();
 
         if (columns.Count == 0)
         {
@@ -301,10 +354,7 @@ public sealed class GeminiService(
         object? queryData,
         CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(options.ApiKey))
-        {
-            throw new DomainException("Gemini API key is not configured.");
-        }
+        EnsureConfigured();
 
         var prompt = BuildResponsePrompt(originalQuestion, query, queryData);
         var systemInstruction = BuildResponseSystemInstruction();
@@ -523,8 +573,8 @@ public sealed class GeminiService(
         }
 
         sb.AppendLine();
-        sb.AppendLine("Result data:");
-        sb.AppendLine(queryData?.ToString() ?? "No data");
+        sb.AppendLine("Result data (JSON):");
+        sb.AppendLine(SerializeResultData(queryData));
         sb.AppendLine();
         sb.AppendLine("Generate a clear, concise, natural language response in the same language as the user's question.");
         sb.AppendLine("Include the specific numbers and data in your response.");
@@ -548,6 +598,119 @@ public sealed class GeminiService(
             - Just answer the question naturally.
             - If the result is empty, say "No results found" or equivalent.
             - Format numbers appropriately (e.g., 1,245 instead of 1245).
+            """;
+    }
+
+    private static string SerializeResultData(object? queryData)
+    {
+        if (queryData is null)
+        {
+            return "null";
+        }
+
+        try
+        {
+            // ToString() sobre tipos anónimos y colecciones devuelve el nombre del tipo,
+            // no los valores: el modelo se quedaba sin los datos que debía resumir.
+            return JsonSerializer.Serialize(queryData);
+        }
+        catch (NotSupportedException)
+        {
+            return queryData.ToString() ?? string.Empty;
+        }
+    }
+
+    public async Task<string> GenerateGroundedResponseAsync(
+        string question,
+        IReadOnlyList<GroundedRow> rows,
+        IReadOnlyList<GroundedFilter> appliedFilters,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureConfigured();
+
+        if (rows.Count == 0)
+        {
+            throw new DomainException("Cannot answer without retrieved records.");
+        }
+
+        var prompt = BuildGroundedPrompt(question, rows, appliedFilters);
+        var systemInstruction = BuildGroundedSystemInstruction();
+
+        try
+        {
+            var response = await CallGeminiApiAsync(prompt, systemInstruction, cancellationToken);
+            return ExtractTextFromResponse(response);
+        }
+        catch (HttpRequestException ex)
+        {
+            logger.LogError(ex, "Failed to call Gemini API for grounded response.");
+            throw new DomainException($"Failed to communicate with AI service: {ex.Message}");
+        }
+        catch (TaskCanceledException)
+        {
+            logger.LogWarning("Gemini API request timed out for grounded response.");
+            throw new DomainException("AI service request timed out. Please try again.");
+        }
+    }
+
+    private static string BuildGroundedPrompt(
+        string question,
+        IReadOnlyList<GroundedRow> rows,
+        IReadOnlyList<GroundedFilter> appliedFilters)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("Answer the user's question using ONLY the records listed below.");
+        sb.AppendLine();
+        sb.AppendLine($"User question: {question}");
+        sb.AppendLine();
+
+        if (appliedFilters.Count > 0)
+        {
+            sb.AppendLine("Filters applied to the retrieved records:");
+            foreach (var filter in appliedFilters)
+            {
+                sb.AppendLine($"  - {filter.Column} {filter.Operator} {filter.Value ?? "(null)"}");
+            }
+
+            sb.AppendLine();
+        }
+
+        sb.AppendLine($"Retrieved records ({rows.Count}), ordered by semantic similarity:");
+        sb.AppendLine();
+
+        foreach (var row in rows)
+        {
+            sb.AppendLine($"- Row {row.RowNumber} (similarity {row.Similarity:0.000}):");
+            foreach (var (column, value) in row.Values)
+            {
+                sb.AppendLine($"    {column}: {value ?? "(empty)"}");
+            }
+
+            sb.AppendLine();
+        }
+
+        sb.AppendLine("RULES:");
+        sb.AppendLine("1. Use only facts present in the records above. Never add outside knowledge.");
+        sb.AppendLine("2. If the records do not contain the answer, say so plainly.");
+        sb.AppendLine("3. Cite the row numbers you used so the user can verify them.");
+        sb.AppendLine("4. Never invent rows, values or counts.");
+
+        return sb.ToString();
+    }
+
+    private static string BuildGroundedSystemInstruction()
+    {
+        return """
+            You answer questions about a dataset using only the records provided in the prompt.
+
+            Rules:
+            - The provided records are the ONLY admissible evidence.
+            - Never use prior knowledge about the entities mentioned to fill gaps.
+            - If the records do not answer the question, state that the dataset does not contain the answer.
+            - Be concise and direct. No markdown, no preamble, no closing pleasantries.
+            - Answer in the same language as the user's question.
+            - Reference the row numbers you used so the answer is verifiable.
+            - If the result is empty, say so.
             """;
     }
 

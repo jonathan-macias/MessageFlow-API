@@ -47,6 +47,16 @@ public interface IDatasetRepository
 
     Task<DatasetRow?> FindRowAsync(Guid datasetId, Guid rowId, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Filas concretas del dataset por Id, en un solo round-trip. Lo usa la búsqueda
+    /// semántica para hidratar los candidatos vectoriales sin una consulta por fila.
+    /// Los Ids que no pertenecen al dataset se ignoran.
+    /// </summary>
+    Task<IReadOnlyList<DatasetRow>> GetRowsByIdsAsync(
+        Guid datasetId,
+        IReadOnlyCollection<Guid> rowIds,
+        CancellationToken cancellationToken = default);
+
     /// <summary>Inserción por lotes de filas (importación streaming §8).</summary>
     Task AddRowsAsync(IEnumerable<DatasetRow> rows, CancellationToken cancellationToken = default);
 

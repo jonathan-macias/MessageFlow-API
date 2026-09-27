@@ -28,6 +28,7 @@ public static class DependencyInjection
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton(new FlowExecutionEngineOptions());
         services.AddSingleton(new FlowSchedulingOptions());
+        services.AddSingleton(new SemanticSearchOptions());
         services.AddScoped<IFlowExecutionEngine, FlowExecutionEngine>();
         services.AddScoped<IScheduledExecutionProcessor, ScheduledExecutionProcessor>();
         services.AddScoped<IDispatcher, Dispatcher>();
