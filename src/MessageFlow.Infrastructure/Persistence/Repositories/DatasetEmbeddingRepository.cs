@@ -105,17 +105,25 @@ public sealed class DatasetEmbeddingRepository(MessageFlowDbContext context) : I
         float[] queryVector,
         int limit)
     {
+        // El vector de consulta se envuelve en Pgvector.Vector a propósito. Un float[]
+        // suelto lo tipa Npgsql como real[], y pgvector no define el operador '<=>' para
+        // arrays: la consulta fallaba en PostgreSQL con
+        // "42883 operator does not exist: vector <=> real[]". El tipo de la columna sí
+        // está declarado como vector(768), pero eso no cambia cómo se infiere el
+        // parámetro. El dominio sigue viendo float[]; el envoltorio es de Infrastructure.
+        var query = new Pgvector.Vector(queryVector);
+
         var embeddings = context.DatasetRowEmbeddings
             .AsNoTracking()
             .Where(e => e.DatasetId == datasetId);
 
         return embeddings
-            .OrderBy(e => VectorDbFunctionsExtensions.CosineDistance(e.Embedding, queryVector))
+            .OrderBy(e => VectorDbFunctionsExtensions.CosineDistance(e.Embedding, query))
             .Select(e => new
             {
                 e.DatasetRowId,
                 e.RowNumber,
-                Distance = VectorDbFunctionsExtensions.CosineDistance(e.Embedding, queryVector),
+                Distance = VectorDbFunctionsExtensions.CosineDistance(e.Embedding, query),
             })
             .Take(limit)
             // Similitud = 1 - distancia coseno. El rango queda en [-1, 1]: dos vectores

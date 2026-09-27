@@ -4,6 +4,7 @@ using MessageFlow.Infrastructure.Persistence;
 using MessageFlow.Infrastructure.Persistence.Repositories;
 using MessageFlow.Tests.TestSupport;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using Xunit;
 
 namespace MessageFlow.Tests.Integration;
@@ -197,7 +198,12 @@ public class PostgresVectorSearchTests(PostgresDatabaseFixture fixture)
         ]);
 
         var error = await Assert.ThrowsAnyAsync<DbUpdateException>(() => context.SaveChangesAsync());
-        Assert.Contains("ux_dataset_row_embeddings_dataset_row_number", error.Message);
+
+        // El nombre del constraint vive en la excepción de Npgsql, no en el mensaje: el
+        // mensaje genérico de EF ("23505 duplicate key value violates unique constraint")
+        // no identifica cuál de los tres índices únicos del esquema se violó.
+        var postgres = Assert.IsType<PostgresException>(error.InnerException);
+        Assert.Equal("ux_dataset_row_embeddings_dataset_row_number", postgres.ConstraintName);
     }
 
     [RequiresDockerFact]
@@ -219,9 +225,10 @@ public class PostgresVectorSearchTests(PostgresDatabaseFixture fixture)
         await repository.AddStateAsync(failed);
         await context.SaveChangesAsync();
 
-        // Ready no se reindexa. Failed tampoco: reencolar el indexado es responsabilidad
-        // de una nueva búsqueda del usuario, no del worker, o un error de cuota convertiría
-        // al worker en un bucle que agota el rate limit.
+        // Ready no se reindexa, y Failed tampoco: reencolar el indexado fallido es
+        // responsabilidad de una nueva búsqueda del usuario, no del worker. Si el worker
+        // reintentara solo, un error de cuota se convertiría en un bucle que agota el
+        // rate limit del free tier en lugar de esperar a que alguien vuelva a preguntar.
         ready.MarkReady();
         await context.SaveChangesAsync();
 
@@ -229,8 +236,8 @@ public class PostgresVectorSearchTests(PostgresDatabaseFixture fixture)
             .ListDatasetsPendingIndexingAsync();
 
         Assert.Contains(pendingId, queued);
-        Assert.Contains(failedId, queued);
         Assert.DoesNotContain(readyId, queued);
+        Assert.DoesNotContain(failedId, queued);
     }
 
     private static async Task<(Guid DatasetId, Guid RowId)> SeedAsync(

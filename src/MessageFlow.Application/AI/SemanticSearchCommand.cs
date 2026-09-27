@@ -279,7 +279,12 @@ public sealed class SemanticSearchCommandHandler(
             }
         }
 
-        state.EnsureComplete();
+        if (state.Status != DatasetEmbeddingStatus.Ready)
+        {
+            // Excepción propia y no DomainException: el cliente distingue "todavía no
+            // está" de "tu solicitud fue inválida" por el código, no por el texto.
+            throw new SemanticIndexingInProgressException(dataset.Id, state.Status.ToString());
+        }
     }
 
     /// <summary>

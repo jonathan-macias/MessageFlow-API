@@ -47,12 +47,14 @@ public class SemanticSearchHandlerTests
     {
         var scenario = Scenario.Create();
 
-        var error = await Assert.ThrowsAsync<DomainException>(() =>
+        // Excepción propia, no DomainException: el frontend la distingue por su código
+        // ("semantic_search_indexing") y sabe que puede reintentar en unos minutos.
+        var error = await Assert.ThrowsAsync<SemanticIndexingInProgressException>(() =>
             scenario.Handler.HandleAsync(new SemanticSearchCommand(scenario.Dataset.Id, "clientes de Bucaramanga")));
 
-        // Sin índice no se devuelve nada: una respuesta construida sobre la mitad del
-        // dataset se leería como el resultado completo.
         Assert.Contains("segundo plano", error.Message);
+        Assert.Equal(scenario.Dataset.Id, error.DatasetId);
+        Assert.Equal("Pending", error.Status);
 
         var state = await scenario.Embeddings.FindStateAsync(scenario.Dataset.Id);
         Assert.NotNull(state);
@@ -68,7 +70,7 @@ public class SemanticSearchHandlerTests
     {
         var scenario = Scenario.Create();
 
-        await Assert.ThrowsAsync<DomainException>(() =>
+        await Assert.ThrowsAsync<SemanticIndexingInProgressException>(() =>
             scenario.Handler.HandleAsync(new SemanticSearchCommand(scenario.Dataset.Id, "clientes")));
 
         Assert.Empty(scenario.EmbeddingService.Calls);
@@ -83,9 +85,10 @@ public class SemanticSearchHandlerTests
         state.RecordProgress(embeddedRows: 2, lastRowNumber: 2, totalRows: scenario.Dataset.RowCount);
         state.MarkFailed("429: quota exceeded");
 
-        await Assert.ThrowsAsync<DomainException>(() =>
+        var error = await Assert.ThrowsAsync<SemanticIndexingInProgressException>(() =>
             scenario.Handler.HandleAsync(new SemanticSearchCommand(scenario.Dataset.Id, "clientes")));
 
+        // El estado vuelve a Pending: la búsqueda reencola el trabajo que falló.
         Assert.Equal(DatasetEmbeddingStatus.Pending, state.Status);
         Assert.Null(state.LastError);
 
@@ -93,6 +96,7 @@ public class SemanticSearchHandlerTests
         // procesadas, que en free tier es la diferencia entre acabar o no.
         Assert.Equal(2, state.LastEmbeddedRowNumber);
         Assert.Equal(2, state.EmbeddedRows);
+        Assert.Equal(nameof(DatasetEmbeddingStatus.Pending), error.Status);
     }
 
     [Fact]

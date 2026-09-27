@@ -40,7 +40,7 @@ public class SemanticSearchSqlTests
         // deja de poder usar el índice HNSW y ordena el dataset completo, y estos tests
         // no lo detectarían solo mirando que aparece el operador.
         Assert.Contains("WHERE d.dataset_id = @datasetId", sql);
-        Assert.Contains("ORDER BY d.embedding <=> @queryVector", sql);
+        Assert.Contains("ORDER BY d.embedding <=> @query", sql);
         Assert.Contains("LIMIT @p", sql);
     }
 

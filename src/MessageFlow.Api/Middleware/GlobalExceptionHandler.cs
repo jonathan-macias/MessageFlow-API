@@ -51,6 +51,21 @@ internal sealed class GlobalExceptionHandler(IProblemDetailsService problemDetai
                     ["errors"] = validation.Failures
                         .GroupBy(f => f.PropertyName)
                         .ToDictionary(g => g.Key, g => g.Select(f => f.ErrorMessage).ToArray()),
+                    ["code"] = "validation_failed",
+                }),
+
+            // Estado transitorio del recurso, no un error de la solicitud: el cliente
+            // debe poder reintentar sin que el usuario perciba un fallo suyo. El "code"
+            // es lo que permite distinguirlo sin comparar el texto del mensaje.
+            SemanticIndexingInProgressException indexing => (
+                StatusCodes.Status409Conflict,
+                "El índice semántico del dataset se está construyendo.",
+                indexing.Message,
+                new Dictionary<string, object?>
+                {
+                    ["code"] = SemanticIndexingInProgressException.ErrorCode,
+                    ["datasetId"] = indexing.DatasetId,
+                    ["status"] = indexing.Status,
                 }),
 
             NotFoundException notFound => (
