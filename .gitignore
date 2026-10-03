@@ -27,6 +27,7 @@ packages/
 *.log
 
 # ASP.NET / .NET
+src/MessageFlow.Api/appsettings.json
 **/appsettings.json
 **/appsettings.Development.json
 **/appsettings.Local.json
