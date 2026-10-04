@@ -3,6 +3,7 @@ using MessageFlow.Application.Abstractions.Messaging;
 using MessageFlow.Application.Common;
 using MessageFlow.Application.Datasets.Commands;
 using MessageFlow.Application.Datasets.Queries;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace MessageFlow.Api.Controllers;
@@ -51,6 +52,12 @@ public sealed class DatasetsController(IDispatcher dispatcher) : ControllerBase
     [HttpGet]
     public async Task<IActionResult> List(CancellationToken cancellationToken)
         => Ok(await dispatcher.QueryAsync(new GetDatasetsQuery(), cancellationToken));
+
+    /// <summary>Cantidad de datasets del usuario actual.</summary>
+    [HttpGet("count")]
+    [AllowAnonymous]
+    public async Task<IActionResult> Count(CancellationToken cancellationToken)
+        => Ok(await dispatcher.QueryAsync(new GetDatasetsCountQuery(), cancellationToken));
 
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken)

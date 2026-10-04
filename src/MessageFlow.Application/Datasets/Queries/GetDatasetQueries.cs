@@ -33,6 +33,18 @@ public sealed class GetDatasetsQueryHandler(IDatasetRepository datasetRepository
             .Select(d => new DatasetSummaryDto(d.Id, d.Name))];
 }
 
+/// <summary>Cantidad de datasets del usuario actual.</summary>
+public sealed record GetDatasetsCountQuery : IQuery<int>;
+
+public sealed class GetDatasetsCountQueryHandler(IDatasetRepository datasetRepository)
+    : IQueryHandler<GetDatasetsCountQuery, int>
+{
+    public Task<int> HandleAsync(
+        GetDatasetsCountQuery query,
+        CancellationToken cancellationToken = default)
+        => datasetRepository.CountDatasetsAsync(cancellationToken);
+}
+
 public sealed record GetDatasetColumnsQuery(Guid DatasetId) : IQuery<IReadOnlyList<ColumnDefinitionDto>>;
 
 public sealed class GetDatasetQueryHandler(IDatasetRepository datasetRepository)

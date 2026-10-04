@@ -83,6 +83,12 @@ public sealed class DatasetRepository(MessageFlowDbContext context, ICurrentUser
         return rows.Select(r => (r.Id, r.Name)).ToList();
     }
 
+    public Task<int> CountDatasetsAsync(CancellationToken cancellationToken = default)
+        => context.Datasets
+            .AsNoTracking()
+            .Where(d => !currentUser.IsAuthenticated || d.OwnerId == currentUser.UserId)
+            .CountAsync(cancellationToken);
+
     public Task<string?> GetPhoneColumnAsync(Guid datasetId, CancellationToken cancellationToken = default)
         => context.Datasets
             .AsNoTracking()

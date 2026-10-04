@@ -43,6 +43,9 @@ public interface IDatasetRepository
     /// <summary>Resúmenes (Id, Nombre) de todos los datasets, más recientes primero.</summary>
     Task<IReadOnlyList<(Guid Id, string Name)>> ListSummariesAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>Cantidad de datasets visibles para el usuario actual.</summary>
+    Task<int> CountDatasetsAsync(CancellationToken cancellationToken = default);
+
     Task<long> CountRowsAsync(Guid datasetId, CancellationToken cancellationToken = default);
 
     Task<DatasetRow?> FindRowAsync(Guid datasetId, Guid rowId, CancellationToken cancellationToken = default);
