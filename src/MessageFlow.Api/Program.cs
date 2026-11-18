@@ -1,5 +1,6 @@
 using System.Text;
 using MessageFlow.Api.Middleware;
+using MessageFlow.Api.Observability;
 using MessageFlow.Application;
 using MessageFlow.Application.Abstractions.Execution;
 using MessageFlow.Application.AI;
@@ -20,6 +21,10 @@ var connectionString = builder.Configuration.GetConnectionString("Default")
     ?? throw new InvalidOperationException("Falta la cadena de conexión 'ConnectionStrings:Default'.");
 
 builder.Services.AddMessageFlowInfrastructure(connectionString);
+
+// Observabilidad: métricas OpenTelemetry (/metrics), salud de PostgreSQL (/health) y
+// errores recientes (/ops/recent-errors) que consume Sentinel.
+builder.Services.AddMessageFlowObservability(connectionString);
 
 // La configuración puede ajustar el scheduler sin tocar código; la re-registración
 // sustituye los valores por defecto registrados por Infrastructure.
@@ -143,5 +148,7 @@ app.UseAuthorization();
 }
 
 app.MapControllers();
+
+app.MapMessageFlowObservability();
 
 app.Run();

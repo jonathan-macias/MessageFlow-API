@@ -1,3 +1,4 @@
+using MessageFlow.Api.Observability;
 using MessageFlow.Application.Abstractions.Messaging;
 using MessageFlow.Application.Common;
 using MessageFlow.Domain.Exceptions;
@@ -13,7 +14,9 @@ namespace MessageFlow.Api.Middleware;
 /// nunca capturan excepciones: los mensajes del dominio son seguros para el cliente
 /// (4xx) y los imprevistos se ocultan tras un 500 genérico.
 /// </summary>
-internal sealed class GlobalExceptionHandler(IProblemDetailsService problemDetailsService) : IExceptionHandler
+internal sealed class GlobalExceptionHandler(
+    IProblemDetailsService problemDetailsService,
+    RecentErrorsBuffer recentErrors) : IExceptionHandler
 {
     public async ValueTask<bool> TryHandleAsync(
         HttpContext httpContext,
@@ -23,6 +26,19 @@ internal sealed class GlobalExceptionHandler(IProblemDetailsService problemDetai
         var (status, title, detail, extensions) = Map(exception);
 
         httpContext.Response.StatusCode = status;
+
+        // Solo los 5xx son incidentes; los 4xx son errores del cliente y harían ruido.
+        if (status >= StatusCodes.Status500InternalServerError)
+        {
+            recentErrors.Add(new RecentError(
+                DateTimeOffset.UtcNow,
+                httpContext.Request.Method,
+                httpContext.Request.Path,
+                status,
+                exception.GetType().FullName ?? exception.GetType().Name,
+                exception.Message,
+                System.Diagnostics.Activity.Current?.TraceId.ToString()));
+        }
 
         return await problemDetailsService.TryWriteAsync(new ProblemDetailsContext
         {

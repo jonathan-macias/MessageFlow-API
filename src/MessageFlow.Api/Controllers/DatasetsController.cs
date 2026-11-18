@@ -55,7 +55,6 @@ public sealed class DatasetsController(IDispatcher dispatcher) : ControllerBase
 
     /// <summary>Cantidad de datasets del usuario actual.</summary>
     [HttpGet("count")]
-    [AllowAnonymous]
     public async Task<IActionResult> Count(CancellationToken cancellationToken)
         => Ok(await dispatcher.QueryAsync(new GetDatasetsCountQuery(), cancellationToken));
 
