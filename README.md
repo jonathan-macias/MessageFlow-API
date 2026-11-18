@@ -239,6 +239,28 @@ src/
   MessageFlow.Tests/            # Unit tests
 ```
 
+## CI/CD & Deployment
+
+| Branch | Trigger |
+|---|---|
+| `main` | `.github/workflows/ci.yml` — build + tests on every PR and push |
+| `PROD` | `.github/workflows/deploy.yml` — tests → ARM64 images to GHCR → deploy on the self-hosted runner |
+
+To release: open a PR `main` → `PROD` and merge it. Deployment files live in `deploy/`:
+
+- `docker-compose.prod.yml` — PostgreSQL 18 + pgvector, Evolution API, migrations and the API (bound to `127.0.0.1:5080`, exposed through Cloudflare Tunnel)
+- `deploy.sh` — DB backup → pull → EF Core migrations → API → `/health` check → automatic rollback on failure
+- `.env.example` — template for the secrets file kept only on the server (`/opt/messageflow/.env`)
+
+Manual rollback: *Actions → Deploy PROD → Run workflow* on `PROD` with `image_tag` set to a previous `sha-xxxxxxx`.
+
+Build the images locally:
+
+```bash
+docker build --target api -t messageflow-api .
+docker build --target migrator -t messageflow-migrator .
+```
+
 ## License
 
 MIT

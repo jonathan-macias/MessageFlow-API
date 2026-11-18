@@ -1,0 +1,8 @@
+# Los scripts y configs que se ejecutan en Linux (Orange Pi / GitHub Actions)
+# deben llegar siempre con finales de línea LF, aunque se editen en Windows.
+*.sh       text eol=lf
+*.yml      text eol=lf
+*.yaml     text eol=lf
+*.sql      text eol=lf
+Dockerfile text eol=lf
+.env*      text eol=lf
