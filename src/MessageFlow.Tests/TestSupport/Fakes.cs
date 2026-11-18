@@ -102,6 +102,9 @@ public sealed class FakeDatasetRepository : IDatasetRepository
     public Task<IReadOnlyList<(Guid Id, string Name)>> ListSummariesAsync(CancellationToken cancellationToken = default)
         => throw new NotSupportedException();
 
+    public Task<int> CountDatasetsAsync(CancellationToken cancellationToken = default)
+        => Task.FromResult(_datasets.Count);
+
     public Task<long> CountRowsAsync(Guid datasetId, CancellationToken cancellationToken = default)
         => Task.FromResult((long)_rows.Count);
 
