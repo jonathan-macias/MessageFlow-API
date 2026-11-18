@@ -1,0 +1,117 @@
+# Stack de producción de MessageFlow en la Orange Pi.
+#
+# Vive en /opt/messageflow junto a un archivo .env (ver .env.example) que NUNCA se
+# sube a Git. deploy.sh lo copia allí en cada despliegue y actualiza IMAGE_TAG.
+#
+# Uso manual en la Pi:
+#   cd /opt/messageflow
+#   docker compose -f docker-compose.prod.yml ps
+#   docker compose -f docker-compose.prod.yml logs -f api
+
+name: messageflow
+
+x-db-connection: &db_connection "Host=postgres;Port=5432;Database=messageflow;Username=messageflow;Password=${POSTGRES_PASSWORD:?Falta POSTGRES_PASSWORD en .env};Gss Encryption Mode=Disable;Options=-c hnsw.iterative_scan=strict_order"
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg18
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: messageflow
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: messageflow
+    # Ajustes modestos para una placa con ~4 GB de RAM compartida con otros servicios.
+    command: >
+      postgres
+      -c shared_buffers=256MB
+      -c effective_cache_size=768MB
+      -c maintenance_work_mem=128MB
+      -c max_connections=50
+    volumes:
+      # pg18 guarda los datos en /var/lib/postgresql/<versión>/...; se monta el padre.
+      - pgdata:/var/lib/postgresql
+      # Solo se ejecuta la primera vez (volumen vacío): extensión vector + BD de Evolution.
+      - ./initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U messageflow -d messageflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    mem_limit: 768m
+    networks: [backend]
+
+  evolution-api:
+    image: ${EVOLUTION_IMAGE:-evoapicloud/evolution-api:v2.3.7}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SERVER_URL: ${EVOLUTION_SERVER_URL:-http://localhost:8081}
+      AUTHENTICATION_API_KEY: ${EVOLUTION_API_KEY:?Falta EVOLUTION_API_KEY en .env}
+      DATABASE_ENABLED: "true"
+      DATABASE_PROVIDER: postgresql
+      DATABASE_CONNECTION_URI: postgresql://messageflow:${POSTGRES_PASSWORD}@postgres:5432/evolution?schema=public
+      DATABASE_CONNECTION_CLIENT_NAME: evolution_messageflow
+      DATABASE_SAVE_DATA_INSTANCE: "true"
+      DATABASE_SAVE_DATA_NEW_MESSAGE: "false"
+      DATABASE_SAVE_MESSAGE_UPDATE: "false"
+      DATABASE_SAVE_DATA_CONTACTS: "false"
+      DATABASE_SAVE_DATA_CHATS: "false"
+      # Sin Redis: caché local para ahorrar memoria en la Pi.
+      CACHE_REDIS_ENABLED: "false"
+      CACHE_LOCAL_ENABLED: "true"
+      LOG_LEVEL: ERROR,WARN,INFO
+    volumes:
+      - evolution_instances:/evolution/instances
+    # Manager/QR de Evolution: por defecto solo desde la propia Pi (127.0.0.1).
+    # Para escanear el QR desde tu PC pon EVOLUTION_BIND=192.168.0.100 en .env
+    # temporalmente, o usa un túnel SSH (ver la doc).
+    ports:
+      - "${EVOLUTION_BIND:-127.0.0.1}:8081:8080"
+    mem_limit: 768m
+    networks: [backend]
+
+  # Tarea de un solo uso: aplica migraciones EF Core. deploy.sh la ejecuta con
+  # `docker compose --profile migrate run --rm migrate` antes de levantar la API.
+  migrate:
+    image: ${IMAGE_NAMESPACE:-ghcr.io/jonathan-macias}/messageflow-migrator:${IMAGE_TAG:?Falta IMAGE_TAG en .env}
+    profiles: [migrate]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["--connection", *db_connection]
+    networks: [backend]
+
+  api:
+    image: ${IMAGE_NAMESPACE:-ghcr.io/jonathan-macias}/messageflow-api:${IMAGE_TAG:?Falta IMAGE_TAG en .env}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      evolution-api:
+        condition: service_started
+    env_file: .env
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      # cloudflared (host) → 127.0.0.1:5080. Respeta X-Forwarded-Proto/For para que
+      # Google OAuth y los redirects vean https.
+      ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
+      ConnectionStrings__Default: *db_connection
+      EvolutionApi__BaseUrl: http://evolution-api:8080
+      EvolutionApi__GlobalApiKey: ${EVOLUTION_API_KEY}
+    volumes:
+      - uploads:/app/data/uploads
+    # Solo en loopback: el único acceso público es el túnel de Cloudflare.
+    ports:
+      - "127.0.0.1:5080:8080"
+    mem_limit: 768m
+    networks: [backend]
+
+volumes:
+  pgdata:
+  evolution_instances:
+  uploads:
+
+networks:
+  backend:

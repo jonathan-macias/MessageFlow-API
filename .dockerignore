@@ -1,0 +1,28 @@
+# Control de versiones e IDEs
+.git
+.gitignore
+.github
+.vs
+.vscode
+.idea
+**/*.user
+
+# Salidas de compilación
+**/bin
+**/obj
+**/TestResults
+
+# Secretos: nunca se hornean en la imagen. En el contenedor la configuración
+# llega por variables de entorno (.env en la Orange Pi).
+**/appsettings.json
+**/appsettings.*.json
+!**/appsettings.example.json
+**/.env
+**/.env.*
+
+# No necesarios para la imagen
+src/MessageFlow.Tests
+deploy
+README.md
+Dockerfile
+**/*.http
