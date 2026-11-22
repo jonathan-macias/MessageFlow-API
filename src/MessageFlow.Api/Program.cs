@@ -39,9 +39,17 @@ var evolutionOptions = builder.Configuration.GetSection(EvolutionApiOptions.Sect
     ?? new EvolutionApiOptions();
 builder.Services.AddSingleton(evolutionOptions);
 
-// Gemini AI service configuration.
+// AI configuration. Text generation uses the provider chosen in "Ai" (with an optional fallback
+// provider); embeddings for semantic search always use Gemini.
 var geminiOptions = builder.Configuration.GetSection(GeminiOptions.SectionName).Get<GeminiOptions>()
     ?? new GeminiOptions();
+var openAiOptions = builder.Configuration.GetSection(OpenAiOptions.SectionName).Get<OpenAiOptions>()
+    ?? new OpenAiOptions();
+var aiOptions = builder.Configuration.GetSection(AiOptions.SectionName).Get<AiOptions>()
+    ?? new AiOptions();
+
+// Unknown provider names or a fallback equal to the primary are configuration mistakes: fail at startup.
+aiOptions.Validate();
 
 // Búsqueda semántica: límites de consulta y ritmo del worker de indexado.
 var semanticSearchOptions = builder.Configuration
@@ -63,6 +71,8 @@ if (semanticSearchOptions.Enabled)
 
 // La re-registración sustituye los valores por defecto registrados por Application/Infrastructure.
 builder.Services.AddSingleton(geminiOptions);
+builder.Services.AddSingleton(openAiOptions);
+builder.Services.AddSingleton(aiOptions);
 builder.Services.AddSingleton(semanticSearchOptions);
 builder.Services.AddSingleton(embeddingIndexingOptions);
 
@@ -149,6 +159,22 @@ if (string.IsNullOrWhiteSpace(evolutionOptions.BaseUrl)
         "Evolution API no está configurada (EvolutionApi:BaseUrl, Instance y GlobalApiKey): " +
         "la aplicación arranca, pero los envíos de WhatsApp fallarán hasta que se configure.");
 }
+
+// Como con Evolution, un proveedor de IA sin configurar no impide el arranque: se avisa en el log
+// y las peticiones de IA fallan con un error claro (o caen al proveedor de respaldo).
+try
+{
+    aiOptions.ValidateProviders(geminiOptions, openAiOptions);
+}
+catch (InvalidOperationException ex)
+{
+    app.Logger.LogWarning("AI text generation is not fully configured: {Reason}", ex.Message);
+}
+
+app.Logger.LogInformation(
+    "AI text generation: provider {Provider}, fallback {Fallback}.",
+    aiOptions.NormalizedProvider,
+    aiOptions.NormalizedFallbackProvider ?? "none");
 
 // La documentación de la API (OpenAPI + Swagger UI) solo se publica en Development o si se
 // activa explícitamente con Swagger:Enabled=true.

@@ -29,6 +29,8 @@ public static class ObservabilityExtensions
                 .AddHttpClientInstrumentation()
                 // Npgsql publica sus métricas (conexiones, comandos) en este Meter.
                 .AddMeter("Npgsql")
+                // Intentos y respaldos de generación de texto con IA (Gemini/OpenAI).
+                .AddMeter(MessageFlow.Infrastructure.AI.AiMetrics.MeterName)
                 .AddPrometheusExporter());
 
         services.AddHealthChecks()

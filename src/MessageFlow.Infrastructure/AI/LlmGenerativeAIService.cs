@@ -1,108 +1,27 @@
-using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using MessageFlow.Application.Abstractions;
 using MessageFlow.Domain.AI;
 using MessageFlow.Domain.Datasets;
 using MessageFlow.Domain.Enums;
 using MessageFlow.Domain.Exceptions;
-using Microsoft.Extensions.Logging;
 
 namespace MessageFlow.Infrastructure.AI;
 
 /// <summary>
-/// Gemini API configuration. Bound from appsettings.json "Gemini" section.
-/// Nothing is defaulted to a concrete model: if the section is missing, the service
-/// fails with an explicit message instead of silently calling a hardcoded model.
+/// Provider-agnostic implementation of IGenerativeAIService. It owns the prompts and the
+/// validation of the model's answer; the actual call to Gemini, OpenAI or any other provider
+/// is delegated to an <see cref="ILlmClient"/> (strategy), optionally wrapped by
+/// <see cref="FallbackLlmClient"/>.
 /// </summary>
-public sealed class GeminiOptions
+public sealed class LlmGenerativeAIService(ILlmClient llmClient) : IGenerativeAIService
 {
-    public const string SectionName = "Gemini";
-
-    /// <summary>Gemini API key. Never exposed to frontend.</summary>
-    public string ApiKey { get; set; } = string.Empty;
-
-    /// <summary>
-    /// Generative model for text (e.g., "gemini-3.5-flash-lite").
-    /// Configurable without code changes.
-    /// </summary>
-    public string Model { get; set; } = string.Empty;
-
-    /// <summary>Embedding model for semantic search (e.g., "gemini-embedding-001").</summary>
-    public string EmbeddingModel { get; set; } = string.Empty;
-
-    /// <summary>
-    /// Width of the embedding vector. Must match the database column
-    /// <c>vector(n)</c>; validated at startup against
-    /// <see cref="MessageFlow.Domain.Datasets.DatasetRowEmbedding.VectorDimensions"/>.
-    /// </summary>
-    public int EmbeddingDimensions { get; set; }
-
-    /// <summary>Fails fast when the generative or embedding model is missing.</summary>
-    public void Validate()
-    {
-        if (string.IsNullOrWhiteSpace(ApiKey))
-        {
-            throw new InvalidOperationException("Missing configuration 'Gemini:ApiKey'.");
-        }
-
-        if (string.IsNullOrWhiteSpace(Model))
-        {
-            throw new InvalidOperationException("Missing configuration 'Gemini:Model'.");
-        }
-
-        if (string.IsNullOrWhiteSpace(EmbeddingModel))
-        {
-            throw new InvalidOperationException("Missing configuration 'Gemini:EmbeddingModel'.");
-        }
-
-        if (EmbeddingDimensions != MessageFlow.Domain.Datasets.DatasetRowEmbedding.VectorDimensions)
-        {
-            throw new InvalidOperationException(
-                $"'Gemini:EmbeddingDimensions' is {EmbeddingDimensions} but the vector column is " +
-                $"vector({MessageFlow.Domain.Datasets.DatasetRowEmbedding.VectorDimensions}). " +
-                "Changing the width requires a new migration and reindexing all datasets.");
-        }
-    }
-}
-
-/// <summary>
-/// Gemini API implementation of IGenerativeAIService.
-/// Generates WhatsApp message templates using dataset variables via Google's Gemini API.
-/// </summary>
-public sealed class GeminiService(
-    HttpClient httpClient,
-    GeminiOptions options,
-    ILogger<GeminiService> logger) : IGenerativeAIService
-{
-    private const int TimeoutSeconds = 60;
-
-    /// <summary>
-    /// Falla con un mensaje claro si la configuración quedó incompleta, en lugar de
-    /// construir una URL con el modelo vacío y devolver un 404 confuso de Google.
-    /// </summary>
-    private void EnsureConfigured()
-    {
-        if (string.IsNullOrWhiteSpace(options.ApiKey))
-        {
-            throw new DomainException("Gemini API key is not configured.");
-        }
-
-        if (string.IsNullOrWhiteSpace(options.Model))
-        {
-            throw new DomainException("Gemini model is not configured.");
-        }
-    }
-
     public async Task<GeneratedMessageResult> GenerateMessageAsync(
         string description,
         string tone,
         IReadOnlyList<ColumnDefinition> columns,
         CancellationToken cancellationToken = default)
     {
-        EnsureConfigured();
-
         if (columns.Count == 0)
         {
             throw new DomainException("No dataset variables available for message generation.");
@@ -111,21 +30,8 @@ public sealed class GeminiService(
         var prompt = BuildPrompt(description, tone, columns);
         var systemInstruction = BuildSystemInstruction();
 
-        try
-        {
-            var response = await CallGeminiApiAsync(prompt, systemInstruction, cancellationToken);
-            return ParseAndValidateResponse(response, columns);
-        }
-        catch (HttpRequestException ex)
-        {
-            logger.LogError(ex, "Failed to call Gemini API.");
-            throw new DomainException("Failed to communicate with the AI service. Try again later.");
-        }
-        catch (TaskCanceledException)
-        {
-            logger.LogWarning("Gemini API request timed out.");
-            throw new DomainException("AI service request timed out. Please try again.");
-        }
+        var text = await llmClient.CompleteAsync(systemInstruction, prompt, LlmOutputFormat.Json, cancellationToken);
+        return ParseAndValidateResponse(text, columns);
     }
 
     private static string BuildPrompt(string description, string tone, IReadOnlyList<ColumnDefinition> columns)
@@ -188,85 +94,11 @@ public sealed class GeminiService(
             """;
     }
 
-    private async Task<JsonElement> CallGeminiApiAsync(
-        string prompt,
-        string systemInstruction,
-        CancellationToken cancellationToken)
-    {
-        var url = $"https://generativelanguage.googleapis.com/v1beta/models/{options.Model}:generateContent";
-
-        var requestBody = new
-        {
-            system_instruction = new
-            {
-                parts = new[] { new { text = systemInstruction } }
-            },
-            contents = new[]
-            {
-                new
-                {
-                    parts = new[] { new { text = prompt } }
-                }
-            },
-            generation_config = new
-            {
-                response_mime_type = "application/json",
-                temperature = 0.7,
-                max_output_tokens = 1024
-            }
-        };
-
-        using var request = new HttpRequestMessage(HttpMethod.Post, url)
-        {
-            Content = JsonContent.Create(requestBody, options: new JsonSerializerOptions
-            {
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-            })
-        };
-
-        // Use x-goog-api-key header instead of query parameter
-        request.Headers.Add("x-goog-api-key", options.ApiKey);
-
-        using var response = await httpClient.SendAsync(request, cancellationToken);
-
-        if (!response.IsSuccessStatusCode)
-        {
-            var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
-            logger.LogError("Gemini API returned {StatusCode}: {Error}", response.StatusCode, errorContent);
-            throw new DomainException(GeminiErrors.ToClientMessage(response.StatusCode));
-        }
-
-        var json = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
-        return json;
-    }
-
     private static GeneratedMessageResult ParseAndValidateResponse(
-        JsonElement response,
+        string text,
         IReadOnlyList<ColumnDefinition> columns)
     {
-        // Extract text from Gemini response structure
-        if (!response.TryGetProperty("candidates", out var candidates) ||
-            candidates.GetArrayLength() == 0)
-        {
-            throw new DomainException("AI service returned an empty response.");
-        }
-
-        var candidate = candidates[0];
-        if (!candidate.TryGetProperty("content", out var content) ||
-            !content.TryGetProperty("parts", out var parts) ||
-            parts.GetArrayLength() == 0)
-        {
-            throw new DomainException("AI service returned an invalid response structure.");
-        }
-
-        var text = parts[0].GetProperty("text").GetString();
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            throw new DomainException("AI service returned an empty message.");
-        }
-
-        // Parse the JSON response from Gemini
-        var result = JsonSerializer.Deserialize<JsonElement>(text);
+        var result = ParseJsonObject(text);
 
         if (!result.TryGetProperty("messageTemplate", out var messageTemplateElement))
         {
@@ -321,8 +153,6 @@ public sealed class GeminiService(
         IReadOnlyList<ColumnDefinition> columns,
         CancellationToken cancellationToken = default)
     {
-        EnsureConfigured();
-
         if (columns.Count == 0)
         {
             throw new DomainException("No dataset columns available for query generation.");
@@ -331,21 +161,8 @@ public sealed class GeminiService(
         var prompt = BuildQueryPrompt(question, columns);
         var systemInstruction = BuildQuerySystemInstruction();
 
-        try
-        {
-            var response = await CallGeminiApiAsync(prompt, systemInstruction, cancellationToken);
-            return ParseAndValidateQueryResponse(response, columns);
-        }
-        catch (HttpRequestException ex)
-        {
-            logger.LogError(ex, "Failed to call Gemini API for dataset query.");
-            throw new DomainException("Failed to communicate with the AI service. Try again later.");
-        }
-        catch (TaskCanceledException)
-        {
-            logger.LogWarning("Gemini API request timed out for dataset query.");
-            throw new DomainException("AI service request timed out. Please try again.");
-        }
+        var text = await llmClient.CompleteAsync(systemInstruction, prompt, LlmOutputFormat.Json, cancellationToken);
+        return ParseAndValidateQueryResponse(text, columns);
     }
 
     public async Task<string> GenerateResponseAsync(
@@ -354,26 +171,11 @@ public sealed class GeminiService(
         object? queryData,
         CancellationToken cancellationToken = default)
     {
-        EnsureConfigured();
-
         var prompt = BuildResponsePrompt(originalQuestion, query, queryData);
         var systemInstruction = BuildResponseSystemInstruction();
 
-        try
-        {
-            var response = await CallGeminiApiAsync(prompt, systemInstruction, cancellationToken);
-            return ExtractTextFromResponse(response);
-        }
-        catch (HttpRequestException ex)
-        {
-            logger.LogError(ex, "Failed to call Gemini API for response generation.");
-            throw new DomainException("Failed to communicate with the AI service. Try again later.");
-        }
-        catch (TaskCanceledException)
-        {
-            logger.LogWarning("Gemini API request timed out for response generation.");
-            throw new DomainException("AI service request timed out. Please try again.");
-        }
+        // Free-text answer: no JSON mode (these prompts do not ask for JSON).
+        return await llmClient.CompleteAsync(systemInstruction, prompt, LlmOutputFormat.Text, cancellationToken);
     }
 
     private static string BuildQueryPrompt(string question, IReadOnlyList<ColumnDefinition> columns)
@@ -451,11 +253,10 @@ public sealed class GeminiService(
     }
 
     private static DatasetQuery ParseAndValidateQueryResponse(
-        JsonElement response,
+        string text,
         IReadOnlyList<ColumnDefinition> columns)
     {
-        var text = ExtractTextFromResponse(response);
-        var result = JsonSerializer.Deserialize<JsonElement>(text);
+        var result = ParseJsonObject(text);
 
         // Parse action
         if (!result.TryGetProperty("action", out var actionElement))
@@ -626,8 +427,6 @@ public sealed class GeminiService(
         IReadOnlyList<GroundedFilter> appliedFilters,
         CancellationToken cancellationToken = default)
     {
-        EnsureConfigured();
-
         if (rows.Count == 0)
         {
             throw new DomainException("Cannot answer without retrieved records.");
@@ -636,21 +435,8 @@ public sealed class GeminiService(
         var prompt = BuildGroundedPrompt(question, rows, appliedFilters);
         var systemInstruction = BuildGroundedSystemInstruction();
 
-        try
-        {
-            var response = await CallGeminiApiAsync(prompt, systemInstruction, cancellationToken);
-            return ExtractTextFromResponse(response);
-        }
-        catch (HttpRequestException ex)
-        {
-            logger.LogError(ex, "Failed to call Gemini API for grounded response.");
-            throw new DomainException("Failed to communicate with the AI service. Try again later.");
-        }
-        catch (TaskCanceledException)
-        {
-            logger.LogWarning("Gemini API request timed out for grounded response.");
-            throw new DomainException("AI service request timed out. Please try again.");
-        }
+        // Free-text answer: no JSON mode (these prompts do not ask for JSON).
+        return await llmClient.CompleteAsync(systemInstruction, prompt, LlmOutputFormat.Text, cancellationToken);
     }
 
     private static string BuildGroundedPrompt(
@@ -714,28 +500,26 @@ public sealed class GeminiService(
             """;
     }
 
-    private static string ExtractTextFromResponse(JsonElement response)
+    /// <summary>
+    /// The clients ask the provider for JSON, but a model can still return something else
+    /// (or a JSON value that is not an object). Report that as a controlled error.
+    /// </summary>
+    private static JsonElement ParseJsonObject(string text)
     {
-        if (!response.TryGetProperty("candidates", out var candidates) ||
-            candidates.GetArrayLength() == 0)
+        try
         {
-            throw new DomainException("AI service returned an empty response.");
-        }
+            var result = JsonSerializer.Deserialize<JsonElement>(text);
 
-        var candidate = candidates[0];
-        if (!candidate.TryGetProperty("content", out var content) ||
-            !content.TryGetProperty("parts", out var parts) ||
-            parts.GetArrayLength() == 0)
+            if (result.ValueKind != JsonValueKind.Object)
+            {
+                throw new DomainException("AI service returned an unexpected response format.");
+            }
+
+            return result;
+        }
+        catch (JsonException)
         {
-            throw new DomainException("AI service returned an invalid response structure.");
+            throw new DomainException("AI service returned an invalid response format.");
         }
-
-        var text = parts[0].GetProperty("text").GetString();
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            throw new DomainException("AI service returned an empty message.");
-        }
-
-        return text;
     }
 }
