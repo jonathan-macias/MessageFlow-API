@@ -44,25 +44,25 @@ public sealed class GeminiOptions
     {
         if (string.IsNullOrWhiteSpace(ApiKey))
         {
-            throw new InvalidOperationException("Falta la configuración 'Gemini:ApiKey'.");
+            throw new InvalidOperationException("Missing configuration 'Gemini:ApiKey'.");
         }
 
         if (string.IsNullOrWhiteSpace(Model))
         {
-            throw new InvalidOperationException("Falta la configuración 'Gemini:Model'.");
+            throw new InvalidOperationException("Missing configuration 'Gemini:Model'.");
         }
 
         if (string.IsNullOrWhiteSpace(EmbeddingModel))
         {
-            throw new InvalidOperationException("Falta la configuración 'Gemini:EmbeddingModel'.");
+            throw new InvalidOperationException("Missing configuration 'Gemini:EmbeddingModel'.");
         }
 
         if (EmbeddingDimensions != MessageFlow.Domain.Datasets.DatasetRowEmbedding.VectorDimensions)
         {
             throw new InvalidOperationException(
-                $"'Gemini:EmbeddingDimensions' es {EmbeddingDimensions} pero la columna del vector es " +
+                $"'Gemini:EmbeddingDimensions' is {EmbeddingDimensions} but the vector column is " +
                 $"vector({MessageFlow.Domain.Datasets.DatasetRowEmbedding.VectorDimensions}). " +
-                "Cambiar el ancho exige una migración nueva y reindexar todos los datasets.");
+                "Changing the width requires a new migration and reindexing all datasets.");
         }
     }
 }
@@ -119,7 +119,7 @@ public sealed class GeminiService(
         catch (HttpRequestException ex)
         {
             logger.LogError(ex, "Failed to call Gemini API.");
-            throw new DomainException($"Failed to communicate with AI service: {ex.Message}");
+            throw new DomainException("Failed to communicate with the AI service. Try again later.");
         }
         catch (TaskCanceledException)
         {
@@ -233,7 +233,7 @@ public sealed class GeminiService(
         {
             var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
             logger.LogError("Gemini API returned {StatusCode}: {Error}", response.StatusCode, errorContent);
-            throw new DomainException($"AI service returned {(int)response.StatusCode}: {errorContent}");
+            throw new DomainException(GeminiErrors.ToClientMessage(response.StatusCode));
         }
 
         var json = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
@@ -339,7 +339,7 @@ public sealed class GeminiService(
         catch (HttpRequestException ex)
         {
             logger.LogError(ex, "Failed to call Gemini API for dataset query.");
-            throw new DomainException($"Failed to communicate with AI service: {ex.Message}");
+            throw new DomainException("Failed to communicate with the AI service. Try again later.");
         }
         catch (TaskCanceledException)
         {
@@ -367,7 +367,7 @@ public sealed class GeminiService(
         catch (HttpRequestException ex)
         {
             logger.LogError(ex, "Failed to call Gemini API for response generation.");
-            throw new DomainException($"Failed to communicate with AI service: {ex.Message}");
+            throw new DomainException("Failed to communicate with the AI service. Try again later.");
         }
         catch (TaskCanceledException)
         {
@@ -644,7 +644,7 @@ public sealed class GeminiService(
         catch (HttpRequestException ex)
         {
             logger.LogError(ex, "Failed to call Gemini API for grounded response.");
-            throw new DomainException($"Failed to communicate with AI service: {ex.Message}");
+            throw new DomainException("Failed to communicate with the AI service. Try again later.");
         }
         catch (TaskCanceledException)
         {

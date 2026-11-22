@@ -40,19 +40,19 @@ public sealed class Dataset : AuditableEntity
 
         if (string.IsNullOrWhiteSpace(name))
         {
-            throw new Exceptions.DomainException("El nombre del dataset es obligatorio.");
+            throw new Exceptions.DomainException("The dataset name is required.");
         }
 
         var trimmedName = name.Trim();
 
         if (trimmedName.Length > NameMaxLength)
         {
-            throw new Exceptions.DomainException($"El nombre del dataset no puede superar {NameMaxLength} caracteres.");
+            throw new Exceptions.DomainException($"The dataset name cannot exceed {NameMaxLength} characters.");
         }
 
         if (string.IsNullOrWhiteSpace(sourceFileName))
         {
-            throw new InvalidDatasetFileException("El nombre del archivo de origen es obligatorio.");
+            throw new InvalidDatasetFileException("The source file name is required.");
         }
 
         return new Dataset
@@ -70,7 +70,7 @@ public sealed class Dataset : AuditableEntity
     {
         if (string.IsNullOrWhiteSpace(rawName))
         {
-            throw new InvalidDatasetFileException("Los encabezados de las columnas no pueden estar vacíos.");
+            throw new InvalidDatasetFileException("Column headers cannot be empty.");
         }
 
         var normalized = string.Join(
@@ -93,7 +93,7 @@ public sealed class Dataset : AuditableEntity
 
         if (_columns.Any(c => c.Ordinal == ordinal))
         {
-            throw new Exceptions.DomainException($"Ya existe una columna en la posición {ordinal} del dataset.");
+            throw new Exceptions.DomainException($"A column already exists at position {ordinal} of the dataset.");
         }
 
         var column = new DatasetColumn(Id, name, dataType, ordinal);
@@ -111,7 +111,7 @@ public sealed class Dataset : AuditableEntity
     {
         if (string.IsNullOrWhiteSpace(rawPhoneColumn))
         {
-            throw new InvalidDatasetFileException("La columna telefónica es obligatoria.");
+            throw new InvalidDatasetFileException("The phone column is required.");
         }
 
         var normalized = NormalizeColumnName(rawPhoneColumn);

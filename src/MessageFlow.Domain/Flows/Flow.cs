@@ -76,7 +76,7 @@ public sealed class Flow : AuditableEntity
 
         if (datasetId == Guid.Empty)
         {
-            throw new DomainException("El Flow debe estar asociado a un dataset.");
+            throw new DomainException("The Flow must be associated with a dataset.");
         }
 
         return new Flow
@@ -135,7 +135,7 @@ public sealed class Flow : AuditableEntity
         if (dataTrigger is not null && Schedule.Type != ExecutionType.DataTriggered)
         {
             throw new DomainException(
-                $"El trigger de datos solo aplica a Flows de tipo '{ExecutionType.DataTriggered}'.");
+                $"The data trigger only applies to Flows of type '{ExecutionType.DataTriggered}'.");
         }
 
         DataTrigger = dataTrigger;
@@ -200,8 +200,8 @@ public sealed class Flow : AuditableEntity
         if (invalid)
         {
             throw new DomainException(
-                $"La configuración del Flow no es consistente con el tipo de ejecución '{Schedule.Type}'. " +
-                "Complete los datos de programación antes de activarlo.");
+                $"The Flow configuration is not consistent with execution type '{Schedule.Type}'. " +
+                "Complete the scheduling details before activating it.");
         }
     }
 
@@ -219,12 +219,12 @@ public sealed class Flow : AuditableEntity
     {
         if (string.IsNullOrWhiteSpace(name))
         {
-            throw new DomainException("El nombre del Flow es obligatorio.");
+            throw new DomainException("The Flow name is required.");
         }
 
         if (name.Trim().Length > NameMaxLength)
         {
-            throw new DomainException($"El nombre del Flow no puede superar {NameMaxLength} caracteres.");
+            throw new DomainException($"The Flow name cannot exceed {NameMaxLength} characters.");
         }
     }
 

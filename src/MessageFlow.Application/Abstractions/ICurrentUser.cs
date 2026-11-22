@@ -15,4 +15,11 @@ public interface ICurrentUser
 
     /// <summary>True si el usuario está autenticado.</summary>
     bool IsAuthenticated { get; }
+
+    /// <summary>
+    /// True solo en procesos internos sin petición HTTP (scheduler, indexado): los repositorios
+    /// no filtran por propietario. Una petición HTTP sin autenticar NO es sistema: no ve datos
+    /// de ningún usuario.
+    /// </summary>
+    bool IsSystem { get; }
 }

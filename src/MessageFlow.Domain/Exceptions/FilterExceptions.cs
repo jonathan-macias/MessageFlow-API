@@ -13,7 +13,7 @@ public sealed class InvalidFilterValueException(string message)
 }
 
 public sealed class UnsupportedFilterOperatorException(ColumnDataType dataType, Filters.FilterOperator @operator)
-    : DomainException($"El operador '{@operator}' no está soportado para columnas de tipo '{dataType}'.")
+    : DomainException($"The operator '{@operator}' is not supported for columns of type '{dataType}'.")
 {
     public ColumnDataType DataType { get; } = dataType;
 

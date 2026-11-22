@@ -27,21 +27,21 @@ public sealed class UploadDatasetCommandValidator : AbstractValidator<UploadData
     public UploadDatasetCommandValidator(DatasetImportOptions options)
     {
         RuleFor(x => x.Name)
-            .NotEmpty().WithMessage("El nombre del dataset es obligatorio.")
+            .NotEmpty().WithMessage("The dataset name is required.")
             .MaximumLength(Dataset.NameMaxLength);
 
         RuleFor(x => x.SourceFileName)
-            .NotEmpty().WithMessage("El nombre del archivo es obligatorio.")
+            .NotEmpty().WithMessage("The file name is required.")
             .Must(f => f.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase))
-            .WithMessage("Solo se aceptan archivos Excel (.xlsx).");
+            .WithMessage("Only Excel files (.xlsx) are accepted.");
 
         RuleFor(x => x.ContentLength)
-            .GreaterThan(0).WithMessage("El archivo está vacío.")
+            .GreaterThan(0).WithMessage("The file is empty.")
             .LessThanOrEqualTo(options.MaxFileSizeBytes)
-            .WithMessage($"El archivo supera el tamaño máximo permitido ({options.MaxFileSizeBytes / (1024 * 1024)} MB).");
+            .WithMessage($"The file exceeds the maximum allowed size ({options.MaxFileSizeBytes / (1024 * 1024)} MB).");
 
         RuleFor(x => x.PhoneColumn)
-            .NotEmpty().WithMessage("La columna telefónica (phoneColumn) es obligatoria.");
+            .NotEmpty().WithMessage("The phone column (phoneColumn) is required.");
     }
 }
 
@@ -58,7 +58,7 @@ public sealed class UploadDatasetCommandHandler(
         if (command.Content.CanSeek && command.Content.Length > options.MaxFileSizeBytes)
         {
             throw new InvalidDatasetFileException(
-                $"El archivo supera el tamaño máximo permitido ({options.MaxFileSizeBytes / (1024 * 1024)} MB).");
+                $"The file exceeds the maximum allowed size ({options.MaxFileSizeBytes / (1024 * 1024)} MB).");
         }
 
         // El binario original se persiste primero: la lectura de Excel ocurre sobre
@@ -165,6 +165,11 @@ public sealed class UploadDatasetCommandHandler(
 
         foreach (var row in reader.ReadDataRows())
         {
+            if (IsBlankRow(row))
+            {
+                continue;
+            }
+
             sample.Add(row);
 
             if (sample.Count >= options.TypeInferenceSampleSize)
@@ -176,7 +181,11 @@ public sealed class UploadDatasetCommandHandler(
         return sample;
     }
 
-    /// <summary>Rinde primero las filas ya leídas para la muestra y luego continúa el streaming.</summary>
+    /// <summary>
+    /// Rinde primero las filas ya leídas para la muestra y luego continúa el streaming.
+    /// Las filas sin ningún dato se omiten: Excel suele devolver filas con formato pero vacías
+    /// al final de la hoja (o entre registros) y no son registros del dataset.
+    /// </summary>
     private static IEnumerable<IReadOnlyList<string?>> EnumerateAllRows(
         IExcelReader reader,
         IReadOnlyList<IReadOnlyList<string?>> alreadyBuffered)
@@ -188,8 +197,25 @@ public sealed class UploadDatasetCommandHandler(
 
         foreach (var row in reader.ReadDataRows())
         {
-            yield return row;
+            if (!IsBlankRow(row))
+            {
+                yield return row;
+            }
         }
+    }
+
+    /// <summary>Una fila está en blanco cuando todas sus celdas son nulas, vacías o solo espacios.</summary>
+    private static bool IsBlankRow(IReadOnlyList<string?> cells)
+    {
+        foreach (var cell in cells)
+        {
+            if (!string.IsNullOrWhiteSpace(cell))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private DatasetRow BuildRow(

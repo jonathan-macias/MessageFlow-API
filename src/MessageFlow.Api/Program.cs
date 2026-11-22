@@ -1,6 +1,7 @@
 using System.Text;
 using MessageFlow.Api.Middleware;
 using MessageFlow.Api.Observability;
+using MessageFlow.Api.Security;
 using MessageFlow.Application;
 using MessageFlow.Application.Abstractions.Execution;
 using MessageFlow.Application.AI;
@@ -18,7 +19,7 @@ builder.Services.AddMessageFlowApplication();
 // Infrastructure: PostgreSQL (Npgsql), Identity, repositorios EF Core, almacenamiento de
 // archivos, proveedor de WhatsApp y worker del scheduler.
 var connectionString = builder.Configuration.GetConnectionString("Default")
-    ?? throw new InvalidOperationException("Falta la cadena de conexión 'ConnectionStrings:Default'.");
+    ?? throw new InvalidOperationException("Missing connection string 'ConnectionStrings:Default'.");
 
 builder.Services.AddMessageFlowInfrastructure(connectionString);
 
@@ -31,10 +32,12 @@ builder.Services.AddMessageFlowObservability(connectionString);
 builder.Services.AddSingleton(
     builder.Configuration.GetSection("Scheduling").Get<FlowSchedulingOptions>() ?? new FlowSchedulingOptions());
 
-// Credenciales/endpoint de Evolution API (WhatsApp): nunca hardcodeadas.
-builder.Services.AddSingleton(
-    builder.Configuration.GetSection(EvolutionApiOptions.SectionName).Get<EvolutionApiOptions>()
-    ?? throw new InvalidOperationException("Falta la sección 'EvolutionApi' en la configuración."));
+// Credenciales/endpoint de Evolution API (WhatsApp): nunca hardcodeadas. Si faltan, la
+// aplicación arranca igualmente (se avisa en el log al iniciar) y los envíos fallan con
+// un error claro, en lugar de impedir el arranque o detener el scheduler.
+var evolutionOptions = builder.Configuration.GetSection(EvolutionApiOptions.SectionName).Get<EvolutionApiOptions>()
+    ?? new EvolutionApiOptions();
+builder.Services.AddSingleton(evolutionOptions);
 
 // Gemini AI service configuration.
 var geminiOptions = builder.Configuration.GetSection(GeminiOptions.SectionName).Get<GeminiOptions>()
@@ -65,7 +68,15 @@ builder.Services.AddSingleton(embeddingIndexingOptions);
 
 // ── Autenticación (JWT + Google) ──────────────────────────────────────────────
 var jwtSecret = builder.Configuration["Jwt:Secret"]
-    ?? throw new InvalidOperationException("Falta la configuración 'Jwt:Secret'.");
+    ?? throw new InvalidOperationException("Missing configuration 'Jwt:Secret'.");
+
+// HS256 firma con una clave simétrica: una corta se adivina por fuerza bruta y permitiría falsificar tokens.
+const int MinJwtSecretBytes = 32;
+if (Encoding.UTF8.GetByteCount(jwtSecret) < MinJwtSecretBytes)
+{
+    throw new InvalidOperationException(
+        $"'Jwt:Secret' must be at least {MinJwtSecretBytes} bytes. Generate one with: openssl rand -hex 32");
+}
 
 builder.Services
     .AddAuthentication(options =>
@@ -90,9 +101,9 @@ builder.Services
     .AddGoogle(options =>
     {
         options.ClientId = builder.Configuration["Authentication:Google:ClientId"]
-            ?? throw new InvalidOperationException("Falta 'Authentication:Google:ClientId'.");
+            ?? throw new InvalidOperationException("Missing 'Authentication:Google:ClientId'.");
         options.ClientSecret = builder.Configuration["Authentication:Google:ClientSecret"]
-            ?? throw new InvalidOperationException("Falta 'Authentication:Google:ClientSecret'.");
+            ?? throw new InvalidOperationException("Missing 'Authentication:Google:ClientSecret'.");
         options.SaveTokens = false;
     });
 
@@ -102,6 +113,9 @@ builder.Services.AddAuthorizationBuilder()
         JwtBearerDefaults.AuthenticationScheme)
         .RequireAuthenticatedUser()
         .Build());
+
+// ── Límite de peticiones (auth por IP; IA y envíos por usuario) ─────────────────
+builder.Services.AddMessageFlowRateLimiting();
 
 // ── CORS para frontend React en desarrollo ──────────────────────────────────────
 builder.Services.AddCors(options =>
@@ -127,10 +141,48 @@ builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
+if (string.IsNullOrWhiteSpace(evolutionOptions.BaseUrl)
+    || string.IsNullOrWhiteSpace(evolutionOptions.Instance)
+    || string.IsNullOrWhiteSpace(evolutionOptions.GlobalApiKey))
+{
+    app.Logger.LogWarning(
+        "Evolution API no está configurada (EvolutionApi:BaseUrl, Instance y GlobalApiKey): " +
+        "la aplicación arranca, pero los envíos de WhatsApp fallarán hasta que se configure.");
+}
+
+// La documentación de la API (OpenAPI + Swagger UI) solo se publica en Development o si se
+// activa explícitamente con Swagger:Enabled=true.
+var documentationEnabled = app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Swagger:Enabled");
+
 // ── Pipeline middleware ─────────────────────────────────────────────────────────
 app.UseExceptionHandler();
 
+if (!app.Environment.IsDevelopment())
+{
+    // Cabecera HSTS (solo sobre HTTPS; detrás del túnel el esquema llega por X-Forwarded-Proto).
+    app.UseHsts();
+}
+
 app.UseHttpsRedirection();
+
+if (!documentationEnabled)
+{
+    // Debe ir antes de los archivos estáticos: index.html es el Swagger UI.
+    app.Use(async (context, next) =>
+    {
+        var path = context.Request.Path;
+
+        if (path == "/" || path.StartsWithSegments("/index.html") || path.StartsWithSegments("/openapi"))
+        {
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+            return;
+        }
+
+        await next();
+    });
+}
+
+app.UseMessageFlowMetricsProtection();
 
 app.UseDefaultFiles();
 app.UseStaticFiles();
@@ -140,7 +192,10 @@ app.UseCors("AllowFrontend");
 app.UseAuthentication();
 app.UseAuthorization();
 
-//if (app.Environment.IsDevelopment())
+// Después de la autenticación: las políticas por usuario necesitan el id del usuario.
+app.UseRateLimiter();
+
+if (documentationEnabled)
 {
     app.MapOpenApi().AllowAnonymous();
 

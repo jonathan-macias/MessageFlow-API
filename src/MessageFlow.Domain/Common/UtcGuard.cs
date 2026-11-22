@@ -9,5 +9,5 @@ internal static class UtcGuard
         [CallerArgumentExpression(nameof(value))] string? paramName = null)
         => value.Offset == TimeSpan.Zero
             ? value
-            : throw new Exceptions.DomainException($"El valor '{paramName}' debe expresarse en UTC (offset cero).");
+            : throw new Exceptions.DomainException($"The value '{paramName}' must be expressed in UTC (zero offset).");
 }

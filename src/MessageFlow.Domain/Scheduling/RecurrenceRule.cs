@@ -28,7 +28,7 @@ public sealed record RecurrenceRule
         if (intervalDays is < MinIntervalDays or > MaxIntervalDays)
         {
             throw new InvalidRecurrenceException(
-                $"El intervalo debe estar entre {MinIntervalDays} y {MaxIntervalDays} días.");
+                $"The interval must be between {MinIntervalDays} and {MaxIntervalDays} days.");
         }
 
         return new RecurrenceRule(Enums.RecurrenceFrequency.Daily, localTimeOfDay, intervalDays);
@@ -63,7 +63,7 @@ public sealed record RecurrenceRule
             candidateDate = candidateDate.AddDays(IntervalDays);
         }
 
-        throw new InvalidRecurrenceException("No fue posible calcular la próxima ocurrencia de la recurrencia.");
+        throw new InvalidRecurrenceException("Unable to calculate the next occurrence of the recurrence.");
 
         DateTime At(DateTime date) => new(
             date.Year,

@@ -28,6 +28,11 @@ public sealed class GetDatasetRowsQueryHandler(IDatasetRepository datasetReposit
         GetDatasetRowsQuery query,
         CancellationToken cancellationToken = default)
     {
+        // El repositorio de filas no filtra por propietario: la propiedad se valida aquí.
+        // Un dataset ajeno es indistinguible de uno inexistente.
+        _ = await datasetRepository.FindByIdAsync(query.DatasetId, cancellationToken)
+            ?? throw new NotFoundException("Dataset", query.DatasetId);
+
         var (items, total) = await datasetRepository.ListRowsAsync(
             query.DatasetId,
             query.Page.Page,

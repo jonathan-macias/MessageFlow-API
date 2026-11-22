@@ -14,7 +14,7 @@ public sealed class DataTriggerMatcher(DateTriggerMatchMode matchMode)
 {
     public DateTriggerMatchMode MatchMode { get; } = Enum.IsDefined(matchMode)
         ? matchMode
-        : throw new ArgumentOutOfRangeException(nameof(matchMode), matchMode, "Modo de coincidencia desconocido.");
+        : throw new ArgumentOutOfRangeException(nameof(matchMode), matchMode, "Unknown match mode.");
 
     public static DataTriggerMatcher Create(DataTriggerConfig config)
     {

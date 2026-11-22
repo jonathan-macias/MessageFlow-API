@@ -29,7 +29,7 @@ public sealed class PreviewFlowMessageQueryValidator : AbstractValidator<Preview
 
         RuleFor(x => x)
             .Must(q => q.DatasetRowId.HasValue || (q.SampleValues?.Count ?? 0) > 0)
-            .WithMessage("Provea 'DatasetRowId' o 'SampleValues' para generar la vista previa.")
+            .WithMessage("Provide 'DatasetRowId' or 'SampleValues' to generate the preview.")
             .WithName(nameof(PreviewFlowMessageQuery.DatasetRowId));
     }
 }

@@ -47,7 +47,7 @@ public sealed class FlowExecutionEngine(
         if (options.SaveBatchSize is < FlowExecutionEngineOptions.MinSaveBatchSize or > FlowExecutionEngineOptions.MaxSaveBatchSize)
         {
             throw new ArgumentOutOfRangeException(nameof(options), options.SaveBatchSize,
-                $"El tamaño de lote debe estar entre {FlowExecutionEngineOptions.MinSaveBatchSize} y {FlowExecutionEngineOptions.MaxSaveBatchSize}.");
+                $"The batch size must be between {FlowExecutionEngineOptions.MinSaveBatchSize} and {FlowExecutionEngineOptions.MaxSaveBatchSize}.");
         }
 
         var execution = await executionRepository.FindByIdAsync(flowExecutionId, cancellationToken)
@@ -65,7 +65,7 @@ public sealed class FlowExecutionEngine(
 
         if (!flow.IsExecutable())
         {
-            return await CloseFromPendingAsync(execution, $"El Flow '{flow.Name}' no está activo (estado '{flow.Status}').");
+            return await CloseFromPendingAsync(execution, $"The Flow '{flow.Name}' is not active (status '{flow.Status}').");
         }
 
         if (!await executionRepository.TryBeginProcessingAsync(flowExecutionId, timeProvider.GetUtcNow(), cancellationToken))
@@ -90,6 +90,7 @@ public sealed class FlowExecutionEngine(
             var pipeline = await BuildPipelineAsync(flow, cancellationToken);
 
             long cursorRowNumber = 0;
+            var consecutiveProviderFailures = 0;
             while (true)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -102,7 +103,29 @@ public sealed class FlowExecutionEngine(
                 foreach (var row in page)
                 {
                     cursorRowNumber = row.RowNumber;
-                    await ProcessRowAsync(execution, row, pipeline, processedAtUtc, cancellationToken);
+                    var outcome = await ProcessRowAsync(execution, row, pipeline, processedAtUtc, cancellationToken);
+
+                    // Un proveedor caído haría fallar cada fila (con su timeout): tras varios fallos
+                    // de infraestructura seguidos se detiene la corrida con un único error claro.
+                    // Un éxito o un rechazo propio del número demuestran que el proveedor responde.
+                    switch (outcome)
+                    {
+                        case RowOutcome.Sent or RowOutcome.Rejected:
+                            consecutiveProviderFailures = 0;
+                            break;
+
+                        case RowOutcome.ProviderUnavailable:
+                            consecutiveProviderFailures++;
+
+                            if (options.MaxConsecutiveProviderFailures > 0
+                                && consecutiveProviderFailures >= options.MaxConsecutiveProviderFailures)
+                            {
+                                throw new ProviderUnavailableException(
+                                    pipeline.Provider.Channel, consecutiveProviderFailures, row.RowNumber);
+                            }
+
+                            break;
+                    }
                 }
 
                 var endReached = page.Count < options.SaveBatchSize;
@@ -133,7 +156,7 @@ public sealed class FlowExecutionEngine(
         catch (OperationCanceledException)
         {
             logger.LogWarning("El procesamiento de la ejecución {FlowExecutionId} fue cancelado.", flowExecutionId);
-            await CloseBestEffortAsync(flowExecutionId, e => e.Cancel(timeProvider.GetUtcNow(), "Procesamiento cancelado antes de finalizar."));
+            await CloseBestEffortAsync(flowExecutionId, e => e.Cancel(timeProvider.GetUtcNow(), "Processing was cancelled before it finished."));
             throw;
         }
         catch (Exception ex)
@@ -175,7 +198,7 @@ public sealed class FlowExecutionEngine(
             recipientColumn = columns.FirstOrDefault(c =>
                 string.Equals(c.Name, phoneColumnName.Trim(), StringComparison.OrdinalIgnoreCase))
                 ?? throw new DomainException(
-                    $"La columna telefónica '{phoneColumnName}' configurada en el dataset ya no existe entre sus columnas.");
+                    $"The phone column '{phoneColumnName}' configured on the dataset no longer exists among its columns.");
         }
         else if (flow.RecipientColumnId.HasValue)
         {
@@ -184,24 +207,24 @@ public sealed class FlowExecutionEngine(
         else
         {
             throw new DomainException(
-                "El dataset no tiene una columna telefónica configurada y el Flow no define una columna destinataria.");
+                "The dataset has no phone column configured and the Flow does not define a recipient column.");
         }
 
         if (recipientColumn is null)
         {
             throw new DomainException(
-                "La columna destinataria configurada en el Flow ya no existe en el dataset.");
+                "The recipient column configured on the Flow no longer exists in the dataset.");
         }
 
         var provider = messageProviders.FirstOrDefault(p => p.Channel == flow.Channel)
-            ?? throw new DomainException($"No hay un proveedor de mensajes registrado para el canal '{flow.Channel}'.");
+            ?? throw new DomainException($"No message provider is registered for channel '{flow.Channel}'.");
 
         DataTriggerEvaluation? dataTrigger = null;
         if (flow.DataTrigger is not null)
         {
             var triggerColumn = columns.FirstOrDefault(c => c.Id == flow.DataTrigger.ColumnId)
                 ?? throw new DomainException(
-                    "La columna del trigger de datos no existe en el dataset del Flow.");
+                    "The data trigger column does not exist in the Flow's dataset.");
 
             var localToday = DateOnly.FromDateTime(
                 TimeZoneInfo.ConvertTime(timeProvider.GetUtcNow(), flow.Schedule.Zone.ToTimeZoneInfo()).DateTime);
@@ -222,7 +245,7 @@ public sealed class FlowExecutionEngine(
             dataTrigger);
     }
 
-    private static async Task ProcessRowAsync(
+    private static async Task<RowOutcome> ProcessRowAsync(
         FlowExecution execution,
         DatasetRow row,
         RowPipeline pipeline,
@@ -234,7 +257,7 @@ public sealed class FlowExecutionEngine(
         // El trigger de datos (DataTriggered) es una condición adicional al filtro raíz.
         if (!pipeline.Matcher.Matches(row.Values))
         {
-            return;
+            return RowOutcome.NotApplicable;
         }
 
         if (pipeline.DataTrigger is { } trigger)
@@ -243,15 +266,15 @@ public sealed class FlowExecutionEngine(
 
             if (!trigger.Matcher.Matches(triggerCell, trigger.ReferenceDate))
             {
-                return;
+                return RowOutcome.NotApplicable;
             }
         }
 
         if (!row.Values.TryGetValue(pipeline.RecipientColumnName, out var destination)
             || string.IsNullOrWhiteSpace(destination))
         {
-            execution.RegisterSkipped(row.Id, $"Sin valor de destinatario en la columna '{pipeline.RecipientColumnName}'.", executedAtUtc);
-            return;
+            execution.RegisterSkipped(row.Id, $"No recipient value in column '{pipeline.RecipientColumnName}'.", executedAtUtc);
+            return RowOutcome.NotApplicable;
         }
 
         try
@@ -265,11 +288,11 @@ public sealed class FlowExecutionEngine(
             if (delivery.IsSuccess)
             {
                 execution.RegisterSuccess(row.Id, executedAtUtc);
+                return RowOutcome.Sent;
             }
-            else
-            {
-                execution.RegisterFailure(row.Id, delivery.Error ?? "El proveedor devolvió un error sin detalle.", executedAtUtc);
-            }
+
+            execution.RegisterFailure(row.Id, delivery.Error ?? "The provider returned an error with no details.", executedAtUtc);
+            return delivery.IsTransient ? RowOutcome.ProviderUnavailable : RowOutcome.Rejected;
         }
         catch (OperationCanceledException)
         {
@@ -279,7 +302,24 @@ public sealed class FlowExecutionEngine(
         {
             // Un registro problemático no detiene la corrida masiva.
             execution.RegisterFailure(row.Id, ex.Message, executedAtUtc);
+            return RowOutcome.Rejected;
         }
+    }
+
+    /// <summary>Resultado de procesar una fila, usado para detectar un proveedor caído.</summary>
+    private enum RowOutcome
+    {
+        /// <summary>Sin filtro, trigger o destinatario: no se intentó el envío.</summary>
+        NotApplicable,
+
+        /// <summary>El proveedor aceptó el mensaje.</summary>
+        Sent,
+
+        /// <summary>Falló por causa del mensaje o del número (el proveedor sí respondió).</summary>
+        Rejected,
+
+        /// <summary>Falló por infraestructura del proveedor (caído, sin configurar, sin red).</summary>
+        ProviderUnavailable,
     }
 
     /// <summary>Cierra la ejecución en un estado terminal tolerando fallos secundarios (p. ej. BD caída).</summary>

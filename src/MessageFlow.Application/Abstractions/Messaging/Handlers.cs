@@ -29,7 +29,7 @@ public interface IQueryHandler<in TQuery, TResponse>
 /// La API lo mapea a ProblemDetails 400/422 en la fase de endpoints.
 /// </summary>
 public sealed class ValidationFailedException(IReadOnlyList<ValidationFailure> failures)
-    : Exception("La solicitud no pasó la validación.")
+    : Exception("The request failed validation.")
 {
     public IReadOnlyList<ValidationFailure> Failures { get; } = failures;
 }

@@ -52,7 +52,7 @@ public class SemanticSearchHandlerTests
         var error = await Assert.ThrowsAsync<SemanticIndexingInProgressException>(() =>
             scenario.Handler.HandleAsync(new SemanticSearchCommand(scenario.Dataset.Id, "clientes de Bucaramanga")));
 
-        Assert.Contains("segundo plano", error.Message);
+        Assert.Contains("in the background", error.Message);
         Assert.Equal(scenario.Dataset.Id, error.DatasetId);
         Assert.Equal("Pending", error.Status);
 

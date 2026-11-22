@@ -23,12 +23,12 @@ public sealed record DataTriggerConfig
     {
         if (columnId == Guid.Empty)
         {
-            throw new DomainException("El trigger de datos debe indicar una columna válida del dataset.");
+            throw new DomainException("The data trigger must specify a valid dataset column.");
         }
 
         if (!Enum.IsDefined(matchMode))
         {
-            throw new DomainException($"Modo de coincidencia de fecha desconocido: '{matchMode}'.");
+            throw new DomainException($"Unknown date match mode: '{matchMode}'.");
         }
 
         return new DataTriggerConfig(columnId, matchMode);

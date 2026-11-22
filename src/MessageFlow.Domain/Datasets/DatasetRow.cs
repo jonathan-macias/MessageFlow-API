@@ -28,12 +28,12 @@ public sealed class DatasetRow : Entity
     {
         if (datasetId == Guid.Empty)
         {
-            throw new DomainException("La fila debe pertenecer a un dataset.");
+            throw new DomainException("The row must belong to a dataset.");
         }
 
         if (rowNumber < 1)
         {
-            throw new DomainException("El número de fila debe ser mayor o igual a 1.");
+            throw new DomainException("The row number must be greater than or equal to 1.");
         }
 
         ArgumentNullException.ThrowIfNull(values);

@@ -68,17 +68,17 @@ public sealed class FlowExecution : AuditableEntity
     {
         if (flowId == Guid.Empty)
         {
-            throw new DomainException("La ejecución debe pertenecer a un Flow.");
+            throw new DomainException("The execution must belong to a Flow.");
         }
 
         if (!Enum.IsDefined(executionType) || !Enum.IsDefined(triggerSource))
         {
-            throw new DomainException("Tipo de ejecución u origen de disparo desconocido.");
+            throw new DomainException("Unknown execution type or trigger source.");
         }
 
         if (string.IsNullOrWhiteSpace(idempotencyKey))
         {
-            throw new DomainException("La clave de idempotencia es obligatoria.");
+            throw new DomainException("The idempotency key is required.");
         }
 
         var key = idempotencyKey.Trim();
@@ -86,12 +86,12 @@ public sealed class FlowExecution : AuditableEntity
         if (key.Length > IdempotencyKeyMaxLength)
         {
             throw new DomainException(
-                $"La clave de idempotencia no puede superar {IdempotencyKeyMaxLength} caracteres.");
+                $"The idempotency key cannot exceed {IdempotencyKeyMaxLength} characters.");
         }
 
         if (totalRecords < 0)
         {
-            throw new DomainException("El total de registros no puede ser negativo.");
+            throw new DomainException("The total record count cannot be negative.");
         }
 
         return new FlowExecution
@@ -159,7 +159,7 @@ public sealed class FlowExecution : AuditableEntity
     {
         if (string.IsNullOrWhiteSpace(errorMessage))
         {
-            throw new DomainException("El mensaje de error es obligatorio al fallar una ejecución.");
+            throw new DomainException("An error message is required when failing an execution.");
         }
 
         if (Status is not (ExecutionStatus.Pending or ExecutionStatus.Running))

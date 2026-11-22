@@ -18,7 +18,7 @@ internal sealed class TokenService(IConfiguration configuration) : ITokenService
         Guid userId, string email, IReadOnlyList<string>? roles = null)
     {
         var secret = configuration["Jwt:Secret"]
-            ?? throw new InvalidOperationException("Falta la configuración 'Jwt:Secret'.");
+            ?? throw new InvalidOperationException("Missing configuration 'Jwt:Secret'.");
 
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);

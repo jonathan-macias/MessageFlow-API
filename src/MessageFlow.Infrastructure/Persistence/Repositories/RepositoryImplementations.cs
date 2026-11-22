@@ -13,7 +13,7 @@ public sealed class FlowRepository(MessageFlowDbContext context, ICurrentUser cu
 {
     public Task<Flow?> FindByIdAsync(Guid id, CancellationToken cancellationToken = default)
         => context.Flows
-            .Where(f => f.Id == id && (!currentUser.IsAuthenticated || f.OwnerId == currentUser.UserId))
+            .Where(f => f.Id == id && (currentUser.IsSystem || f.OwnerId == currentUser.UserId))
             .FirstOrDefaultAsync(cancellationToken);
 
     public async Task AddAsync(Flow flow, CancellationToken cancellationToken = default)
@@ -31,7 +31,7 @@ public sealed class FlowRepository(MessageFlowDbContext context, ICurrentUser cu
         CancellationToken cancellationToken = default)
     {
         var query = context.Flows.AsNoTracking()
-            .Where(f => !currentUser.IsAuthenticated || f.OwnerId == currentUser.UserId)
+            .Where(f => currentUser.IsSystem || f.OwnerId == currentUser.UserId)
             .OrderByDescending(f => f.CreatedAtUtc);
 
         var total = await query.CountAsync(cancellationToken);
@@ -55,7 +55,7 @@ public sealed class DatasetRepository(MessageFlowDbContext context, ICurrentUser
 {
     public Task<Dataset?> FindByIdAsync(Guid id, CancellationToken cancellationToken = default)
         => context.Datasets.Include(d => d.Columns)
-            .Where(d => d.Id == id && (!currentUser.IsAuthenticated || d.OwnerId == currentUser.UserId))
+            .Where(d => d.Id == id && (currentUser.IsSystem || d.OwnerId == currentUser.UserId))
             .FirstOrDefaultAsync(cancellationToken);
 
     public async Task AddAsync(Dataset dataset, CancellationToken cancellationToken = default)
@@ -75,7 +75,7 @@ public sealed class DatasetRepository(MessageFlowDbContext context, ICurrentUser
     {
         var rows = await context.Datasets
             .AsNoTracking()
-            .Where(d => !currentUser.IsAuthenticated || d.OwnerId == currentUser.UserId)
+            .Where(d => currentUser.IsSystem || d.OwnerId == currentUser.UserId)
             .OrderByDescending(d => d.CreatedAtUtc)
             .Select(d => new { d.Id, d.Name })
             .ToListAsync(cancellationToken);
@@ -86,7 +86,7 @@ public sealed class DatasetRepository(MessageFlowDbContext context, ICurrentUser
     public Task<int> CountDatasetsAsync(CancellationToken cancellationToken = default)
         => context.Datasets
             .AsNoTracking()
-            .Where(d => !currentUser.IsAuthenticated || d.OwnerId == currentUser.UserId)
+            .Where(d => currentUser.IsSystem || d.OwnerId == currentUser.UserId)
             .CountAsync(cancellationToken);
 
     public Task<string?> GetPhoneColumnAsync(Guid datasetId, CancellationToken cancellationToken = default)
@@ -177,7 +177,7 @@ public sealed class FlowExecutionRepository(MessageFlowDbContext context, ICurre
     public Task<FlowExecution?> FindByIdAsync(Guid id, CancellationToken cancellationToken = default)
         => context.FlowExecutions
             .Where(e => e.Id == id
-                && (!currentUser.IsAuthenticated
+                && (currentUser.IsSystem
                     || context.Flows.Any(f => f.Id == e.FlowId && f.OwnerId == currentUser.UserId)))
             .FirstOrDefaultAsync(cancellationToken);
 
@@ -193,7 +193,7 @@ public sealed class FlowExecutionRepository(MessageFlowDbContext context, ICurre
         var query = context.FlowExecutions
             .AsNoTracking()
             .Where(e => e.FlowId == flowId
-                && (!currentUser.IsAuthenticated
+                && (currentUser.IsSystem
                     || context.Flows.Any(f => f.Id == e.FlowId && f.OwnerId == currentUser.UserId)))
             .OrderByDescending(e => e.StartedAtUtc);
 

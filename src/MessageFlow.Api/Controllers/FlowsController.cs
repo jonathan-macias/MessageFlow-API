@@ -1,10 +1,12 @@
 using MessageFlow.Api.Contracts;
+using MessageFlow.Api.Security;
 using MessageFlow.Application.Abstractions.Messaging;
 using MessageFlow.Application.Common;
 using MessageFlow.Application.Executions.Queries;
 using MessageFlow.Application.Flows.Commands;
 using MessageFlow.Application.Flows.Queries;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace MessageFlow.Api.Controllers;
 
@@ -87,6 +89,7 @@ public sealed class FlowsController(IDispatcher dispatcher) : ControllerBase
     /// "Send Now" (§6): encola una ejecución inmediata y retorna 202 sin esperar el envío.
     /// </summary>
     [HttpPost("{id:guid}/execute")]
+    [EnableRateLimiting(RateLimitPolicies.Execute)]
     public async Task<IActionResult> Execute(Guid id, CancellationToken cancellationToken)
     {
         var executionId = await dispatcher.SendAsync<ExecuteFlowCommand, Guid>(new ExecuteFlowCommand(id), cancellationToken);

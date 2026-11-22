@@ -54,17 +54,17 @@ public sealed class DatasetRowEmbedding : Entity
     {
         if (datasetId == Guid.Empty)
         {
-            throw new DomainException("El embedding debe pertenecer a un dataset.");
+            throw new DomainException("The embedding must belong to a dataset.");
         }
 
         if (datasetRowId == Guid.Empty)
         {
-            throw new DomainException("El embedding debe pertenecer a una fila del dataset.");
+            throw new DomainException("The embedding must belong to a dataset row.");
         }
 
         if (rowNumber < 1)
         {
-            throw new DomainException("El número de fila debe ser mayor o igual a 1.");
+            throw new DomainException("The row number must be greater than or equal to 1.");
         }
 
         ArgumentException.ThrowIfNullOrWhiteSpace(content);
@@ -73,8 +73,8 @@ public sealed class DatasetRowEmbedding : Entity
         if (embedding.Length != VectorDimensions)
         {
             throw new DomainException(
-                $"El vector debe tener {VectorDimensions} dimensiones y se recibieron {embedding.Length}. " +
-                "Verificá 'Gemini:EmbeddingDimensions' y que el modelo configurado emita ese ancho.");
+                $"The vector must have {VectorDimensions} dimensions but {embedding.Length} were received. " +
+                "Check 'Gemini:EmbeddingDimensions' and that the configured model produces that width.");
         }
 
         DatasetId = datasetId;

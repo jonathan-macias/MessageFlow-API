@@ -182,7 +182,7 @@ public sealed class GeminiEmbeddingService(
         catch (HttpRequestException ex)
         {
             logger.LogError(ex, "Failed to call the Gemini embeddings endpoint.");
-            throw new DomainException($"Failed to communicate with AI service: {ex.Message}");
+            throw new DomainException("Failed to communicate with the AI service. Try again later.");
         }
         catch (TaskCanceledException)
         {
@@ -199,7 +199,7 @@ public sealed class GeminiEmbeddingService(
         {
             var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
             logger.LogError("Gemini embeddings returned {StatusCode}: {Error}", response.StatusCode, errorContent);
-            throw new DomainException($"AI service returned {(int)response.StatusCode}: {errorContent}");
+            throw new DomainException(GeminiErrors.ToClientMessage(response.StatusCode));
         }
 
         return await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
