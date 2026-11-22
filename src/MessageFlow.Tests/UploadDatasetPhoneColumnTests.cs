@@ -94,6 +94,35 @@ public class UploadDatasetPhoneColumnTests
         Assert.Single(_storage.Deleted); // el binario huérfano fue eliminado
     }
 
+    [Fact]
+    public async Task Las_filas_vacias_del_excel_no_se_importan_como_registros()
+    {
+        // Excel suele devolver filas con formato pero sin datos al final de la hoja (o intercaladas).
+        var entries = new List<Dictionary<string, object?>>
+        {
+            new() { ["Nombre"] = "Carlos", ["Numero Celular"] = "3001234567" },
+            new() { ["Nombre"] = DBNull.Value, ["Numero Celular"] = DBNull.Value },
+            new() { ["Nombre"] = "Ana", ["Numero Celular"] = "3011112222" },
+            new() { ["Nombre"] = DBNull.Value, ["Numero Celular"] = DBNull.Value },
+            new() { ["Nombre"] = " ", ["Numero Celular"] = DBNull.Value },
+            new() { ["Nombre"] = DBNull.Value, ["Numero Celular"] = DBNull.Value },
+        };
+
+        using var content = new MemoryStream();
+        content.SaveAs(entries);
+        content.Position = 0;
+
+        var datasetId = await BuildHandler().HandleAsync(new UploadDatasetCommand(
+            "Contactos",
+            "contactos.xlsx",
+            content.Length,
+            content,
+            "Numero Celular"));
+
+        Assert.Equal(2, _datasets.Store[datasetId].RowCount);
+        Assert.Equal(2, await _datasets.CountRowsAsync(datasetId));
+    }
+
     /// <summary>Almacén en memoria con registro de eliminaciones para verificar limpieza.</summary>
     private sealed class InMemoryFileStorage : IDatasetFileStorage
     {
