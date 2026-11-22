@@ -61,7 +61,7 @@ internal sealed class GlobalExceptionHandler(
         {
             ValidationFailedException validation => (
                 StatusCodes.Status400BadRequest,
-                "La solicitud no pasó la validación.",
+                "The request failed validation.",
                 null,
                 new Dictionary<string, object?>
                 {
@@ -76,7 +76,7 @@ internal sealed class GlobalExceptionHandler(
             // es lo que permite distinguirlo sin comparar el texto del mensaje.
             SemanticIndexingInProgressException indexing => (
                 StatusCodes.Status409Conflict,
-                "El índice semántico del dataset se está construyendo.",
+                "The dataset's semantic index is being built.",
                 indexing.Message,
                 new Dictionary<string, object?>
                 {
@@ -87,7 +87,7 @@ internal sealed class GlobalExceptionHandler(
 
             NotFoundException notFound => (
                 StatusCodes.Status404NotFound,
-                "Recurso no encontrado.",
+                "Resource not found.",
                 notFound.Message,
                 EmptyExtensions()),
 
@@ -100,19 +100,19 @@ internal sealed class GlobalExceptionHandler(
             DuplicateExecutionItemException or
             DuplicateColumnException => (
                 StatusCodes.Status409Conflict,
-                "Conflicto con el estado actual del recurso.",
+                "Conflict with the current state of the resource.",
                 exception.Message,
                 EmptyExtensions()),
 
             DomainException domain => (
                 StatusCodes.Status400BadRequest,
-                "Solicitud inválida.",
+                "Invalid request.",
                 domain.Message,
                 EmptyExtensions()),
 
             _ => (
                 StatusCodes.Status500InternalServerError,
-                "Error interno del servidor.",
+                "Internal server error.",
                 null,
                 EmptyExtensions()),
         };

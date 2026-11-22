@@ -15,6 +15,6 @@ public sealed class GoogleLoginCommandValidator : AbstractValidator<GoogleLoginC
     public GoogleLoginCommandValidator()
     {
         RuleFor(x => x.IdToken)
-            .NotEmpty().WithMessage("El token de Google es obligatorio.");
+            .NotEmpty().WithMessage("The Google token is required.");
     }
 }

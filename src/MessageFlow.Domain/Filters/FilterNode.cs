@@ -24,7 +24,7 @@ public sealed record FilterCondition : FilterNode
     {
         if (columnId == Guid.Empty)
         {
-            throw new InvalidFilterStructureException("La condición de filtro debe indicar una columna válida.");
+            throw new InvalidFilterStructureException("The filter condition must specify a valid column.");
         }
 
         ColumnId = columnId;
@@ -52,12 +52,12 @@ public sealed record FilterGroup : FilterNode
 
         if (list.Count == 0)
         {
-            throw new InvalidFilterStructureException("Un grupo de filtros debe contener al menos una condición.");
+            throw new InvalidFilterStructureException("A filter group must contain at least one condition.");
         }
 
         if (list.Any(c => c is null))
         {
-            throw new InvalidFilterStructureException("El grupo de filtros contiene condiciones nulas.");
+            throw new InvalidFilterStructureException("The filter group contains null conditions.");
         }
 
         var group = new FilterGroup(composition, list);
@@ -70,7 +70,7 @@ public sealed record FilterGroup : FilterNode
         if (depth > MaxDepth)
         {
             throw new InvalidFilterStructureException(
-                $"Se excedió la profundidad máxima permitida ({MaxDepth}) en el árbol de filtros.");
+                $"The maximum allowed depth ({MaxDepth}) of the filter tree was exceeded.");
         }
 
         foreach (var condition in Conditions)
@@ -83,7 +83,7 @@ public sealed record FilterGroup : FilterNode
                 case FilterCondition:
                     break;
                 default:
-                    throw new InvalidFilterStructureException("Tipo de nodo de filtro desconocido.");
+                    throw new InvalidFilterStructureException("Unknown filter node type.");
             }
         }
     }

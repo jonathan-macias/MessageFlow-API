@@ -56,7 +56,7 @@ public static class FilterOperatorPolicy
         ColumnDataType.Number => NumberOperators,
         ColumnDataType.Date => DateOperators,
         ColumnDataType.Boolean => BooleanOperators,
-        _ => throw new ArgumentOutOfRangeException(nameof(dataType), dataType, "Tipo de columna desconocido."),
+        _ => throw new ArgumentOutOfRangeException(nameof(dataType), dataType, "Unknown column type."),
     };
 
     public static bool IsAllowed(ColumnDataType dataType, FilterOperator @operator)

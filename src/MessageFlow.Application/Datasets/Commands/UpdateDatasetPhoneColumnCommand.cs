@@ -21,7 +21,7 @@ public sealed class UpdateDatasetPhoneColumnCommandValidator : AbstractValidator
         RuleFor(x => x.DatasetId).NotEmpty();
 
         RuleFor(x => x.PhoneColumn)
-            .NotEmpty().WithMessage("La columna telefónica (phoneColumn) es obligatoria.");
+            .NotEmpty().WithMessage("The phone column (phoneColumn) is required.");
     }
 }
 

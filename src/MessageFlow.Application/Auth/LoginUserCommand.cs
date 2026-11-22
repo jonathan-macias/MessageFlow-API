@@ -12,10 +12,10 @@ public sealed class LoginUserCommandValidator : AbstractValidator<LoginUserComma
     public LoginUserCommandValidator()
     {
         RuleFor(x => x.Email)
-            .NotEmpty().WithMessage("El email es obligatorio.")
-            .EmailAddress().WithMessage("El email no tiene un formato válido.");
+            .NotEmpty().WithMessage("The email is required.")
+            .EmailAddress().WithMessage("The email format is not valid.");
 
         RuleFor(x => x.Password)
-            .NotEmpty().WithMessage("La contraseña es obligatoria.");
+            .NotEmpty().WithMessage("The password is required.");
     }
 }

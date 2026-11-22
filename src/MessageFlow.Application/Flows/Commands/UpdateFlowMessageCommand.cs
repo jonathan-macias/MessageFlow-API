@@ -16,7 +16,7 @@ public sealed class UpdateFlowMessageCommandValidator : AbstractValidator<Update
         RuleFor(x => x.FlowId).NotEmpty();
 
         RuleFor(x => x.Message)
-            .NotEmpty().WithMessage("El mensaje del Flow es obligatorio.")
+            .NotEmpty().WithMessage("The Flow message is required.")
             .MaximumLength(MessageTemplate.MaxLength);
     }
 }

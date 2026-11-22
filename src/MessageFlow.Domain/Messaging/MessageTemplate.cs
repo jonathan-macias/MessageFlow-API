@@ -20,14 +20,14 @@ public sealed partial record MessageTemplate
     {
         if (string.IsNullOrWhiteSpace(text))
         {
-            throw new InvalidTemplateException("El mensaje del Flow no puede estar vacío.");
+            throw new InvalidTemplateException("The Flow message cannot be empty.");
         }
 
         var trimmed = text.Trim();
 
         if (trimmed.Length > MaxLength)
         {
-            throw new InvalidTemplateException($"El mensaje no puede superar {MaxLength} caracteres.");
+            throw new InvalidTemplateException($"The message cannot exceed {MaxLength} characters.");
         }
 
         return new MessageTemplate(trimmed);

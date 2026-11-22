@@ -14,7 +14,7 @@ internal sealed class GoogleTokenValidator(IConfiguration configuration) : IGoog
     public async Task<GoogleUserInfo> ValidateAsync(string idToken, CancellationToken ct = default)
     {
         var clientId = configuration["Authentication:Google:ClientId"]
-            ?? throw new InvalidOperationException("Falta la configuración 'Authentication:Google:ClientId'.");
+            ?? throw new InvalidOperationException("Missing configuration 'Authentication:Google:ClientId'.");
 
         var settings = new GoogleJsonWebSignature.ValidationSettings
         {
@@ -30,7 +30,7 @@ internal sealed class GoogleTokenValidator(IConfiguration configuration) : IGoog
         catch (InvalidJwtException)
         {
             // Un token mal formado o caducado es un error del cliente (400), no un fallo del servidor.
-            throw new DomainException("El token de Google no es válido.");
+            throw new DomainException("The Google token is not valid.");
         }
 
         return ToUserInfo(payload);
@@ -44,7 +44,7 @@ internal sealed class GoogleTokenValidator(IConfiguration configuration) : IGoog
     {
         if (string.IsNullOrWhiteSpace(payload.Email) || !payload.EmailVerified)
         {
-            throw new DomainException("La cuenta de Google no tiene el correo verificado.");
+            throw new DomainException("The Google account's email is not verified.");
         }
 
         return new GoogleUserInfo(

@@ -14,12 +14,12 @@ public sealed record OutboundMessage(Recipient Recipient, string Body, Channel C
 
         if (string.IsNullOrWhiteSpace(body))
         {
-            throw new Exceptions.DomainException("El cuerpo del mensaje no puede estar vacío.");
+            throw new Exceptions.DomainException("The message body cannot be empty.");
         }
 
         if (!Enum.IsDefined(channel))
         {
-            throw new Exceptions.DomainException($"Canal desconocido: '{channel}'.");
+            throw new Exceptions.DomainException($"Unknown channel: '{channel}'.");
         }
 
         return new OutboundMessage(recipient, body.Trim(), channel);

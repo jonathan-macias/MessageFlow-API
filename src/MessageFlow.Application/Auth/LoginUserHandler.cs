@@ -12,7 +12,7 @@ public sealed class LoginUserHandler(IAccountService accountService, ITokenServi
 
         if (result is null)
         {
-            throw new DomainException("Credenciales inválidas.");
+            throw new DomainException("Invalid credentials.");
         }
 
         var (accessToken, expiresAt) = tokenService.GenerateToken(result.Value.UserId, result.Value.Email);

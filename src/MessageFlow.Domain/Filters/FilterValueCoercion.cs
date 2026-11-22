@@ -28,7 +28,7 @@ public static class FilterValueCoercion
 
         if (string.IsNullOrWhiteSpace(rawValue))
         {
-            throw new InvalidFilterValueException("La condición de filtro requiere un valor.");
+            throw new InvalidFilterValueException("The filter condition requires a value.");
         }
 
         var trimmed = rawValue.Trim();
@@ -39,7 +39,7 @@ public static class FilterValueCoercion
             ColumnDataType.Number => ParseNumber(trimmed),
             ColumnDataType.Date => ParseDate(trimmed),
             ColumnDataType.Boolean => ParseBoolean(trimmed),
-            _ => throw new InvalidFilterValueException($"Tipo de columna no soportado para filtros: '{dataType}'."),
+            _ => throw new InvalidFilterValueException($"Column type not supported for filters: '{dataType}'."),
         };
     }
 
@@ -61,16 +61,16 @@ public static class FilterValueCoercion
     private static decimal ParseNumber(string value)
         => TryParseNumber(value, out var number)
             ? number
-            : throw new InvalidFilterValueException($"'{value}' no es un número válido.");
+            : throw new InvalidFilterValueException($"'{value}' is not a valid number.");
 
     private static DateOnly ParseDate(string value)
         => TryParseDate(value, out var date)
             ? date
             : throw new InvalidFilterValueException(
-                $"'{value}' no es una fecha válida. Formatos aceptados: {string.Join(", ", DateFormats)}.");
+                $"'{value}' is not a valid date. Accepted formats: {string.Join(", ", DateFormats)}.");
 
     private static bool ParseBoolean(string value)
         => TryParseBoolean(value, out var flag)
             ? flag
-            : throw new InvalidFilterValueException($"'{value}' no es un valor booleano válido (true/false).");
+            : throw new InvalidFilterValueException($"'{value}' is not a valid boolean value (true/false).");
 }

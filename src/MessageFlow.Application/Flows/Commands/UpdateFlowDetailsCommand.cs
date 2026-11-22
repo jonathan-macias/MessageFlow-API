@@ -14,7 +14,7 @@ public sealed class UpdateFlowDetailsCommandValidator : AbstractValidator<Update
     {
         RuleFor(x => x.FlowId).NotEmpty();
         RuleFor(x => x.Name)
-            .NotEmpty().WithMessage("El nombre del Flow es obligatorio.")
+            .NotEmpty().WithMessage("The Flow name is required.")
             .MaximumLength(Flow.NameMaxLength);
 
         RuleFor(x => x.Description).MaximumLength(Flow.DescriptionMaxLength);

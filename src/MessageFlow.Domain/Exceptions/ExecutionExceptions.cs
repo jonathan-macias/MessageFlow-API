@@ -3,7 +3,7 @@ using MessageFlow.Domain.Enums;
 namespace MessageFlow.Domain.Exceptions;
 
 public sealed class InvalidExecutionTransitionException(ExecutionStatus from, ExecutionStatus to)
-    : DomainException($"Transición de estado no permitida para la ejecución: de '{from}' a '{to}'.")
+    : DomainException($"Execution status transition not allowed: from '{from}' to '{to}'.")
 {
     public ExecutionStatus From { get; } = from;
 
@@ -11,7 +11,7 @@ public sealed class InvalidExecutionTransitionException(ExecutionStatus from, Ex
 }
 
 public sealed class ClosedExecutionException(Guid executionId, ExecutionStatus status)
-    : DomainException($"La ejecución '{executionId}' está cerrada (estado '{status}') y no admite más resultados.")
+    : DomainException($"Execution '{executionId}' is closed (status '{status}') and accepts no further results.")
 {
     public Guid ExecutionId { get; } = executionId;
 
@@ -19,7 +19,7 @@ public sealed class ClosedExecutionException(Guid executionId, ExecutionStatus s
 }
 
 public sealed class DuplicateExecutionItemException(Guid executionId, Guid datasetRowId)
-    : DomainException($"La ejecución '{executionId}' ya registra un resultado para la fila '{datasetRowId}'.")
+    : DomainException($"Execution '{executionId}' already has a result for row '{datasetRowId}'.")
 {
     public Guid ExecutionId { get; } = executionId;
 

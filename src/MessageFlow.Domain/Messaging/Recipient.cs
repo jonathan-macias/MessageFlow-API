@@ -12,7 +12,7 @@ public sealed record Recipient(Guid DatasetRowId, string Destination)
     {
         if (datasetRowId == Guid.Empty)
         {
-            throw new Exceptions.DomainException("El destinatario debe referenciar una fila del dataset.");
+            throw new Exceptions.DomainException("The recipient must reference a dataset row.");
         }
 
         if (string.IsNullOrWhiteSpace(destination))

@@ -21,7 +21,7 @@ internal sealed class FilterGroupJsonConverter : JsonConverter<FilterGroup>
         var group = ReadNode(document.RootElement);
 
         return group as FilterGroup
-            ?? throw new JsonException("El nodo raíz del filtro persistido debe ser un grupo.");
+            ?? throw new JsonException("The root node of the persisted filter must be a group.");
     }
 
     public override void Write(Utf8JsonWriter writer, FilterGroup value, JsonSerializerOptions options)
@@ -42,14 +42,14 @@ internal sealed class FilterGroupJsonConverter : JsonConverter<FilterGroup>
             composition = (int)group.Composition,
             children = group.Conditions.Select(ShapeOf).ToArray(),
         },
-        _ => throw new JsonException($"Tipo de nodo de filtro no serializable: '{node.GetType().Name}'."),
+        _ => throw new JsonException($"Filter node type is not serializable: '{node.GetType().Name}'."),
     };
 
     private static FilterNode ReadNode(JsonElement element)
     {
         if (!element.TryGetProperty("kind", out var kindElement) || !kindElement.TryGetInt32(out var kind))
         {
-            throw new JsonException("Nodo de filtro sin 'kind'.");
+            throw new JsonException("Filter node without 'kind'.");
         }
 
         switch (kind)
@@ -58,15 +58,15 @@ internal sealed class FilterGroupJsonConverter : JsonConverter<FilterGroup>
             {
                 var columnId = element.TryGetProperty("columnId", out var column) && column.ValueKind == JsonValueKind.String
                     ? column.GetGuid()
-                    : throw new JsonException("Condición de filtro sin 'columnId'.");
+                    : throw new JsonException("Filter condition without 'columnId'.");
 
                 var operatorRaw = element.TryGetProperty("operator", out var op) && op.ValueKind == JsonValueKind.Number
                     ? op.GetInt32()
-                    : throw new JsonException("Condición de filtro sin 'operator'.");
+                    : throw new JsonException("Filter condition without 'operator'.");
 
                 if (!Enum.IsDefined((FilterOperator)operatorRaw))
                 {
-                    throw new JsonException($"Operador de filtro desconocido: '{operatorRaw}'.");
+                    throw new JsonException($"Unknown filter operator: '{operatorRaw}'.");
                 }
 
                 var value = element.TryGetProperty("value", out var val) && val.ValueKind == JsonValueKind.String
@@ -80,11 +80,11 @@ internal sealed class FilterGroupJsonConverter : JsonConverter<FilterGroup>
             {
                 var compositionRaw = element.TryGetProperty("composition", out var comp) && comp.ValueKind == JsonValueKind.Number
                     ? comp.GetInt32()
-                    : throw new JsonException("Grupo de filtros sin 'composition'.");
+                    : throw new JsonException("Filter group without 'composition'.");
 
                 if (!Enum.IsDefined((FilterCompositionOperator)compositionRaw))
                 {
-                    throw new JsonException($"Composición desconocida: '{compositionRaw}'.");
+                    throw new JsonException($"Unknown composition: '{compositionRaw}'.");
                 }
 
                 var children = new List<FilterNode>();
@@ -101,7 +101,7 @@ internal sealed class FilterGroupJsonConverter : JsonConverter<FilterGroup>
             }
 
             default:
-                throw new JsonException($"'kind' de nodo de filtro desconocido: '{kind}'.");
+                throw new JsonException($"Unknown filter node 'kind': '{kind}'.");
         }
     }
 }

@@ -26,7 +26,7 @@ public sealed class CreateFlowCommandValidator : AbstractValidator<CreateFlowCom
     public CreateFlowCommandValidator()
     {
         RuleFor(x => x.Name)
-            .NotEmpty().WithMessage("El nombre del Flow es obligatorio.")
+            .NotEmpty().WithMessage("The Flow name is required.")
             .MaximumLength(Flow.NameMaxLength);
 
         RuleFor(x => x.Description)
@@ -36,7 +36,7 @@ public sealed class CreateFlowCommandValidator : AbstractValidator<CreateFlowCom
         RuleFor(x => x.Channel).IsInEnum();
 
         RuleFor(x => x.MessageTemplate)
-            .NotEmpty().WithMessage("El mensaje del Flow es obligatorio.")
+            .NotEmpty().WithMessage("The Flow message is required.")
             .MaximumLength(MessageTemplate.MaxLength);
 
         RuleFor(x => x.Schedule).NotNull().SetValidator(new ScheduleRequestValidator());
@@ -53,22 +53,22 @@ public sealed class ScheduleRequestValidator : AbstractValidator<ScheduleRequest
     {
         RuleFor(x => x.Type).IsInEnum();
         RuleFor(x => x.TimeZone)
-            .NotEmpty().WithMessage("La zona horaria es obligatoria.")
+            .NotEmpty().WithMessage("The time zone is required.")
             .Matches(TimeZonePattern)
-            .WithMessage("La zona horaria debe ser un identificador IANA válido, por ejemplo 'America/Bogota'.");
+            .WithMessage("The time zone must be a valid IANA identifier, for example 'America/Bogota'.");
 
         When(x => x.Type == ExecutionType.OneTime, () =>
         {
             RuleFor(x => x.RunAtUtc)
-                .NotNull().WithMessage("Una ejecución única requiere la fecha y hora de ejecución.")
-                .Must(BeUtc).WithMessage("La fecha de ejecución debe expresarse en UTC (offset cero).");
+                .NotNull().WithMessage("A one-time execution requires an execution date and time.")
+                .Must(BeUtc).WithMessage("The execution date must be expressed in UTC (zero offset).");
         });
 
         When(x => x.Type == ExecutionType.Recurring, () =>
         {
             RuleFor(x => x.RecurrenceTimeOfDay)
-                .NotEmpty().WithMessage("La ejecución recurrente requiere una hora del día en formato 'HH:mm'.")
-                .Matches(TimeOfDayPattern).WithMessage("La hora debe tener formato 'HH:mm' (00:00 a 23:59).");
+                .NotEmpty().WithMessage("A recurring execution requires a time of day in 'HH:mm' format.")
+                .Matches(TimeOfDayPattern).WithMessage("The time must be in 'HH:mm' format (00:00 to 23:59).");
 
             RuleFor(x => x.RecurrenceIntervalDays)
                 .InclusiveBetween(RecurrenceRule.MinIntervalDays, RecurrenceRule.MaxIntervalDays)
@@ -89,21 +89,21 @@ internal static class ScheduleFactory
         return request.Type switch
         {
             ExecutionType.OneTime => FlowSchedule.OneTime(
-                request.RunAtUtc ?? throw new DomainException("Una ejecución única requiere fecha y hora."),
+                request.RunAtUtc ?? throw new DomainException("A one-time execution requires a date and time."),
                 zone),
             ExecutionType.Recurring => FlowSchedule.Recurring(
                 RecurrenceRule.Daily(ParseTimeOfDay(request.RecurrenceTimeOfDay), request.RecurrenceIntervalDays ?? 1),
                 zone),
             ExecutionType.DataTriggered => FlowSchedule.DataTriggered(zone),
             ExecutionType.Immediate => FlowSchedule.Immediate(zone),
-            _ => throw new DomainException($"Tipo de ejecución desconocido: '{request.Type}'."),
+            _ => throw new DomainException($"Unknown execution type: '{request.Type}'."),
         };
     }
 
     private static TimeOnly ParseTimeOfDay(string? value)
         => TimeOnly.TryParseExact(value, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var time)
             ? time
-            : throw new DomainException($"La hora '{value}' no tiene el formato 'HH:mm' esperado.");
+            : throw new DomainException($"The time '{value}' is not in the expected 'HH:mm' format.");
 }
 
 public sealed class CreateFlowCommandHandler(
@@ -119,7 +119,7 @@ public sealed class CreateFlowCommandHandler(
 
         if (!Enum.IsDefined(command.Channel))
         {
-            throw new DomainException($"Canal desconocido: '{command.Channel}'.");
+            throw new DomainException($"Unknown channel: '{command.Channel}'.");
         }
 
         var template = MessageTemplate.Create(command.MessageTemplate);

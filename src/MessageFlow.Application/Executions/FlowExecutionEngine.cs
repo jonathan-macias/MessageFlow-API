@@ -47,7 +47,7 @@ public sealed class FlowExecutionEngine(
         if (options.SaveBatchSize is < FlowExecutionEngineOptions.MinSaveBatchSize or > FlowExecutionEngineOptions.MaxSaveBatchSize)
         {
             throw new ArgumentOutOfRangeException(nameof(options), options.SaveBatchSize,
-                $"El tamaño de lote debe estar entre {FlowExecutionEngineOptions.MinSaveBatchSize} y {FlowExecutionEngineOptions.MaxSaveBatchSize}.");
+                $"The batch size must be between {FlowExecutionEngineOptions.MinSaveBatchSize} and {FlowExecutionEngineOptions.MaxSaveBatchSize}.");
         }
 
         var execution = await executionRepository.FindByIdAsync(flowExecutionId, cancellationToken)
@@ -65,7 +65,7 @@ public sealed class FlowExecutionEngine(
 
         if (!flow.IsExecutable())
         {
-            return await CloseFromPendingAsync(execution, $"El Flow '{flow.Name}' no está activo (estado '{flow.Status}').");
+            return await CloseFromPendingAsync(execution, $"The Flow '{flow.Name}' is not active (status '{flow.Status}').");
         }
 
         if (!await executionRepository.TryBeginProcessingAsync(flowExecutionId, timeProvider.GetUtcNow(), cancellationToken))
@@ -156,7 +156,7 @@ public sealed class FlowExecutionEngine(
         catch (OperationCanceledException)
         {
             logger.LogWarning("El procesamiento de la ejecución {FlowExecutionId} fue cancelado.", flowExecutionId);
-            await CloseBestEffortAsync(flowExecutionId, e => e.Cancel(timeProvider.GetUtcNow(), "Procesamiento cancelado antes de finalizar."));
+            await CloseBestEffortAsync(flowExecutionId, e => e.Cancel(timeProvider.GetUtcNow(), "Processing was cancelled before it finished."));
             throw;
         }
         catch (Exception ex)
@@ -198,7 +198,7 @@ public sealed class FlowExecutionEngine(
             recipientColumn = columns.FirstOrDefault(c =>
                 string.Equals(c.Name, phoneColumnName.Trim(), StringComparison.OrdinalIgnoreCase))
                 ?? throw new DomainException(
-                    $"La columna telefónica '{phoneColumnName}' configurada en el dataset ya no existe entre sus columnas.");
+                    $"The phone column '{phoneColumnName}' configured on the dataset no longer exists among its columns.");
         }
         else if (flow.RecipientColumnId.HasValue)
         {
@@ -207,24 +207,24 @@ public sealed class FlowExecutionEngine(
         else
         {
             throw new DomainException(
-                "El dataset no tiene una columna telefónica configurada y el Flow no define una columna destinataria.");
+                "The dataset has no phone column configured and the Flow does not define a recipient column.");
         }
 
         if (recipientColumn is null)
         {
             throw new DomainException(
-                "La columna destinataria configurada en el Flow ya no existe en el dataset.");
+                "The recipient column configured on the Flow no longer exists in the dataset.");
         }
 
         var provider = messageProviders.FirstOrDefault(p => p.Channel == flow.Channel)
-            ?? throw new DomainException($"No hay un proveedor de mensajes registrado para el canal '{flow.Channel}'.");
+            ?? throw new DomainException($"No message provider is registered for channel '{flow.Channel}'.");
 
         DataTriggerEvaluation? dataTrigger = null;
         if (flow.DataTrigger is not null)
         {
             var triggerColumn = columns.FirstOrDefault(c => c.Id == flow.DataTrigger.ColumnId)
                 ?? throw new DomainException(
-                    "La columna del trigger de datos no existe en el dataset del Flow.");
+                    "The data trigger column does not exist in the Flow's dataset.");
 
             var localToday = DateOnly.FromDateTime(
                 TimeZoneInfo.ConvertTime(timeProvider.GetUtcNow(), flow.Schedule.Zone.ToTimeZoneInfo()).DateTime);
@@ -273,7 +273,7 @@ public sealed class FlowExecutionEngine(
         if (!row.Values.TryGetValue(pipeline.RecipientColumnName, out var destination)
             || string.IsNullOrWhiteSpace(destination))
         {
-            execution.RegisterSkipped(row.Id, $"Sin valor de destinatario en la columna '{pipeline.RecipientColumnName}'.", executedAtUtc);
+            execution.RegisterSkipped(row.Id, $"No recipient value in column '{pipeline.RecipientColumnName}'.", executedAtUtc);
             return RowOutcome.NotApplicable;
         }
 
@@ -291,7 +291,7 @@ public sealed class FlowExecutionEngine(
                 return RowOutcome.Sent;
             }
 
-            execution.RegisterFailure(row.Id, delivery.Error ?? "El proveedor devolvió un error sin detalle.", executedAtUtc);
+            execution.RegisterFailure(row.Id, delivery.Error ?? "The provider returned an error with no details.", executedAtUtc);
             return delivery.IsTransient ? RowOutcome.ProviderUnavailable : RowOutcome.Rejected;
         }
         catch (OperationCanceledException)

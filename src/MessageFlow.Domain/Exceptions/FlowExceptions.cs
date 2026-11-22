@@ -1,7 +1,7 @@
 namespace MessageFlow.Domain.Exceptions;
 
 public sealed class InvalidFlowTransitionException(Enums.FlowStatus from, Enums.FlowStatus to)
-    : DomainException($"Transición de estado no permitida para el Flow: de '{from}' a '{to}'.")
+    : DomainException($"Flow status transition not allowed: from '{from}' to '{to}'.")
 {
     public Enums.FlowStatus From { get; } = from;
 
@@ -9,7 +9,7 @@ public sealed class InvalidFlowTransitionException(Enums.FlowStatus from, Enums.
 }
 
 public sealed class FlowNotExecutableException(string flowName, Enums.FlowStatus status)
-    : DomainException($"El Flow '{flowName}' no puede ejecutarse porque su estado es '{status}'. Solo los Flows en estado 'Active' pueden ejecutarse.")
+    : DomainException($"The Flow '{flowName}' cannot be executed because its status is '{status}'. Only Flows with status 'Active' can be executed.")
 {
     public string FlowName { get; } = flowName;
 
@@ -17,7 +17,7 @@ public sealed class FlowNotExecutableException(string flowName, Enums.FlowStatus
 }
 
 public sealed class FlowNotModifiableException(string flowName, Enums.FlowStatus status)
-    : DomainException($"El Flow '{flowName}' no puede modificarse porque su estado es '{status}'.")
+    : DomainException($"The Flow '{flowName}' cannot be modified because its status is '{status}'.")
 {
     public string FlowName { get; } = flowName;
 

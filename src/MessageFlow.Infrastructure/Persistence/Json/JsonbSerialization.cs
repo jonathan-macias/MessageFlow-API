@@ -44,6 +44,6 @@ internal sealed class JsonbConverter<T> : ValueConverter<T, string>
         var value = JsonSerializer.Deserialize<T>(json, JsonbSerialization.Options);
 
         return value
-            ?? throw new FormatException($"Contenido jsonb inválido para '{typeof(T).Name}'.");
+            ?? throw new FormatException($"Invalid jsonb content for '{typeof(T).Name}'.");
     }
 }

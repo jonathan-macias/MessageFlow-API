@@ -12,14 +12,14 @@ public sealed class RegisterUserCommandValidator : AbstractValidator<RegisterUse
     public RegisterUserCommandValidator()
     {
         RuleFor(x => x.Email)
-            .NotEmpty().WithMessage("El email es obligatorio.")
-            .EmailAddress().WithMessage("El email no tiene un formato válido.");
+            .NotEmpty().WithMessage("The email is required.")
+            .EmailAddress().WithMessage("The email format is not valid.");
 
         RuleFor(x => x.Password)
-            .NotEmpty().WithMessage("La contraseña es obligatoria.")
-            .MinimumLength(8).WithMessage("La contraseña debe tener al menos 8 caracteres.")
-            .Matches("[A-Z]").WithMessage("La contraseña debe contener al menos una mayúscula.")
-            .Matches("[a-z]").WithMessage("La contraseña debe contener al menos una minúscula.")
-            .Matches("[0-9]").WithMessage("La contraseña debe contener al menos un número.");
+            .NotEmpty().WithMessage("The password is required.")
+            .MinimumLength(8).WithMessage("The password must be at least 8 characters long.")
+            .Matches("[A-Z]").WithMessage("The password must contain at least one uppercase letter.")
+            .Matches("[a-z]").WithMessage("The password must contain at least one lowercase letter.")
+            .Matches("[0-9]").WithMessage("The password must contain at least one number.");
     }
 }

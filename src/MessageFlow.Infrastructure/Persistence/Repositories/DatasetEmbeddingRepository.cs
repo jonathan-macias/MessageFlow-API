@@ -89,7 +89,7 @@ public sealed class DatasetEmbeddingRepository(MessageFlowDbContext context) : I
         if (queryVector.Length != DatasetRowEmbedding.VectorDimensions)
         {
             throw new DomainException(
-                $"El vector de consulta tiene {queryVector.Length} dimensiones y la columna es " +
+                $"The query vector has {queryVector.Length} dimensions and the column is " +
                 $"vector({DatasetRowEmbedding.VectorDimensions}).");
         }
     }

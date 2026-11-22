@@ -28,7 +28,7 @@ public static class FlowMappings
             FilterCompositionOperator.And,
             Conditions: [new FilterConditionRequest(condition.ColumnId, condition.Operator, condition.Value)]),
         FilterGroup group => FromGroup(group),
-        _ => throw new InvalidOperationException($"Tipo de nodo de filtro no soportado: '{node.GetType().Name}'."),
+        _ => throw new InvalidOperationException($"Unsupported filter node type: '{node.GetType().Name}'."),
     };
 
     private static FilterGroupRequest FromGroup(FilterGroup group) => new(

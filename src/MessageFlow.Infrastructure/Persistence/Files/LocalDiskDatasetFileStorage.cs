@@ -48,7 +48,7 @@ public sealed class LocalDiskDatasetFileStorage(DatasetImportOptions options) : 
     {
         if (string.IsNullOrWhiteSpace(storagePath))
         {
-            throw new ArgumentException("La ruta de almacenamiento es obligatoria.", nameof(storagePath));
+            throw new ArgumentException("The storage path is required.", nameof(storagePath));
         }
 
         var normalized = storagePath.Replace('\\', '/').TrimStart('/');
@@ -58,7 +58,7 @@ public sealed class LocalDiskDatasetFileStorage(DatasetImportOptions options) : 
 
         if (!fullPath.StartsWith(root, StringComparison.Ordinal))
         {
-            throw new UnauthorizedAccessException("La ruta de almacenamiento solicitada no es válida.");
+            throw new UnauthorizedAccessException("The requested storage path is not valid.");
         }
 
         return fullPath;

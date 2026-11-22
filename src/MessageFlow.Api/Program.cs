@@ -19,7 +19,7 @@ builder.Services.AddMessageFlowApplication();
 // Infrastructure: PostgreSQL (Npgsql), Identity, repositorios EF Core, almacenamiento de
 // archivos, proveedor de WhatsApp y worker del scheduler.
 var connectionString = builder.Configuration.GetConnectionString("Default")
-    ?? throw new InvalidOperationException("Falta la cadena de conexión 'ConnectionStrings:Default'.");
+    ?? throw new InvalidOperationException("Missing connection string 'ConnectionStrings:Default'.");
 
 builder.Services.AddMessageFlowInfrastructure(connectionString);
 
@@ -68,14 +68,14 @@ builder.Services.AddSingleton(embeddingIndexingOptions);
 
 // ── Autenticación (JWT + Google) ──────────────────────────────────────────────
 var jwtSecret = builder.Configuration["Jwt:Secret"]
-    ?? throw new InvalidOperationException("Falta la configuración 'Jwt:Secret'.");
+    ?? throw new InvalidOperationException("Missing configuration 'Jwt:Secret'.");
 
 // HS256 firma con una clave simétrica: una corta se adivina por fuerza bruta y permitiría falsificar tokens.
 const int MinJwtSecretBytes = 32;
 if (Encoding.UTF8.GetByteCount(jwtSecret) < MinJwtSecretBytes)
 {
     throw new InvalidOperationException(
-        $"'Jwt:Secret' debe tener al menos {MinJwtSecretBytes} bytes. Genera uno con: openssl rand -hex 32");
+        $"'Jwt:Secret' must be at least {MinJwtSecretBytes} bytes. Generate one with: openssl rand -hex 32");
 }
 
 builder.Services
@@ -101,9 +101,9 @@ builder.Services
     .AddGoogle(options =>
     {
         options.ClientId = builder.Configuration["Authentication:Google:ClientId"]
-            ?? throw new InvalidOperationException("Falta 'Authentication:Google:ClientId'.");
+            ?? throw new InvalidOperationException("Missing 'Authentication:Google:ClientId'.");
         options.ClientSecret = builder.Configuration["Authentication:Google:ClientSecret"]
-            ?? throw new InvalidOperationException("Falta 'Authentication:Google:ClientSecret'.");
+            ?? throw new InvalidOperationException("Missing 'Authentication:Google:ClientSecret'.");
         options.SaveTokens = false;
     });
 
