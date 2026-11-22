@@ -5,7 +5,7 @@ namespace MessageFlow.Application.Abstractions;
 
 /// <summary>
 /// Abstraction for AI-powered operations.
-/// The implementation calls an external AI provider (e.g., Gemini, OpenAI).
+/// The implementation calls an external AI provider (Gemini or OpenAI, with automatic fallback).
 /// </summary>
 public interface IGenerativeAIService
 {

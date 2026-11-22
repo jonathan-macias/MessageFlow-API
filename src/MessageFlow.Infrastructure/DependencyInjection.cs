@@ -19,6 +19,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Pgvector.EntityFrameworkCore;
 
 namespace MessageFlow.Infrastructure;
@@ -43,11 +44,32 @@ public static class DependencyInjection
         services.AddSingleton(new Messaging.EvolutionApiOptions());
         services.AddHttpClient<IMessageProvider, Messaging.EvolutionApiClient>();
 
-        // AI Message Generator: Gemini API for generating WhatsApp message templates.
+        // AI text generation (message templates, dataset queries, grounded answers).
+        // Strategy: one ILlmClient per provider (Gemini, OpenAI); the configured primary is wrapped
+        // by FallbackLlmClient, which retries once and then switches to the fallback provider.
+        // Prompts and answer validation live in LlmGenerativeAIService, shared by every provider.
         services.AddSingleton(new GeminiOptions());
-        services.AddHttpClient<IGenerativeAIService, GeminiService>(client =>
+        services.AddSingleton(new OpenAiOptions());
+        services.AddSingleton(new AiOptions());
+
+        services.AddHttpClient<GeminiLlmClient>(client => client.Timeout = TimeSpan.FromSeconds(60));
+        services.AddHttpClient<OpenAiLlmClient>(client => client.Timeout = TimeSpan.FromSeconds(60));
+
+        services.AddTransient<IGenerativeAIService>(serviceProvider =>
         {
-            client.Timeout = TimeSpan.FromSeconds(60);
+            var aiOptions = serviceProvider.GetRequiredService<AiOptions>();
+
+            ILlmClient Resolve(string provider) => provider == AiOptions.OpenAi
+                ? serviceProvider.GetRequiredService<OpenAiLlmClient>()
+                : serviceProvider.GetRequiredService<GeminiLlmClient>();
+
+            var primary = Resolve(aiOptions.NormalizedProvider);
+            var secondary = aiOptions.NormalizedFallbackProvider is { } fallback ? Resolve(fallback) : null;
+
+            return new LlmGenerativeAIService(new FallbackLlmClient(
+                primary,
+                secondary,
+                serviceProvider.GetRequiredService<ILogger<FallbackLlmClient>>()));
         });
 
         // AI semantic search (RAG): same provider, embeddings endpoint.
