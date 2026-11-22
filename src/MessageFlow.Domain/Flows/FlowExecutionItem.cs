@@ -37,17 +37,17 @@ public sealed class FlowExecutionItem : Entity
     {
         if (flowExecutionId == Guid.Empty)
         {
-            throw new DomainException("El ítem debe pertenecer a una ejecución.");
+            throw new DomainException("The item must belong to an execution.");
         }
 
         if (datasetRowId == Guid.Empty)
         {
-            throw new DomainException("El ítem debe referenciar una fila del dataset.");
+            throw new DomainException("The item must reference a dataset row.");
         }
 
         if (!Enum.IsDefined(status))
         {
-            throw new DomainException($"Estado de ítem desconocido: '{status}'.");
+            throw new DomainException($"Unknown item status: '{status}'.");
         }
 
         return new FlowExecutionItem

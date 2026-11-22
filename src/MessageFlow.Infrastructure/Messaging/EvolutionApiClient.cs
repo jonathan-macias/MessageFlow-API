@@ -69,7 +69,7 @@ public sealed class EvolutionApiClient(
         {
             logger.LogError(
                 "Evolution API no está configurada o su configuración es inválida (EvolutionApi:BaseUrl, Instance y GlobalApiKey).");
-            return DeliveryResult.Failure("Evolution API no está configurada.", isTransient: true);
+            return DeliveryResult.Failure("Evolution API is not configured.", isTransient: true);
         }
 
         var destination = PhoneMasker.Mask(message.Recipient.Destination);
@@ -101,12 +101,12 @@ public sealed class EvolutionApiClient(
         {
             // Timeout del HttpClient (no cancelación del host): fallo transitorio.
             logger.LogWarning("Timeout enviando a {Destination} vía Evolution API.", destination);
-            return DeliveryResult.Failure("Timeout comunicándose con Evolution API.", isTransient: true);
+            return DeliveryResult.Failure("Timed out communicating with Evolution API.", isTransient: true);
         }
         catch (HttpRequestException ex)
         {
             logger.LogError(ex, "Fallo de red enviando a {Destination} vía Evolution API.", destination);
-            return DeliveryResult.Failure($"Fallo de red: {ex.Message}", isTransient: true);
+            return DeliveryResult.Failure($"Network error: {ex.Message}", isTransient: true);
         }
     }
 

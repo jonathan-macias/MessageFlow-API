@@ -114,7 +114,7 @@ public class FlowExecutionEngineTests
         Assert.Equal(1, summary.FailedRecords);
 
         var failed = Assert.Single(execution.Items, i => i.Status == ExecutionItemStatus.Failed);
-        Assert.Contains("no está registrado", failed.ErrorMessage);
+        Assert.Contains("is not registered", failed.ErrorMessage);
     }
 
     [Fact]
@@ -197,7 +197,7 @@ public class FlowExecutionEngineTests
         await Assert.ThrowsAsync<DomainException>(() => engine.ProcessPendingAsync(execution.Id));
 
         Assert.Equal(ExecutionStatus.Failed, execution.Status);
-        Assert.Contains("ya no existe", execution.ErrorMessage);
+        Assert.Contains("no longer exists", execution.ErrorMessage);
     }
 
     [Fact]
@@ -215,7 +215,7 @@ public class FlowExecutionEngineTests
         await Assert.ThrowsAsync<DomainException>(() => engine.ProcessPendingAsync(execution.Id));
 
         Assert.Equal(ExecutionStatus.Failed, execution.Status);
-        Assert.Contains("columna destinataria", execution.ErrorMessage);
+        Assert.Contains("recipient column", execution.ErrorMessage);
         Assert.Empty(harness.ProviderAsStub().Sent);
     }
 
@@ -234,7 +234,7 @@ public class FlowExecutionEngineTests
 
         Assert.Equal(FlowStatus.Draft, flow.Status);
         Assert.Equal(ExecutionStatus.Cancelled, summary.FinalStatus);
-        Assert.Contains("no está activo", execution.ErrorMessage);
+        Assert.Contains("is not active", execution.ErrorMessage);
         Assert.Empty(harness.ProviderAsStub().Sent);
     }
 
@@ -357,7 +357,7 @@ public class FlowExecutionEngineTests
     [Fact]
     public async Task Proveedor_caido_detiene_la_corrida_tras_N_fallos_transitorios_seguidos()
     {
-        var provider = new ScriptedProvider(DeliveryResult.Failure("Fallo de red: connection refused", isTransient: true));
+        var provider = new ScriptedProvider(DeliveryResult.Failure("Network error: connection refused", isTransient: true));
         var harness = new Harness(_datasetId, Columns)
         {
             Rows = [.. Enumerable.Range(1, 10).Select(n => NumberedRow(n))],
@@ -373,13 +373,13 @@ public class FlowExecutionEngineTests
         // No se intenta el resto de filas contra un servicio caído.
         Assert.Equal(3, provider.Attempts);
         Assert.Equal(ExecutionStatus.Failed, execution.Status);
-        Assert.Contains("no está disponible", execution.ErrorMessage);
+        Assert.Contains("is unavailable", execution.ErrorMessage);
     }
 
     [Fact]
     public async Task Fallos_permanentes_del_numero_no_detienen_la_corrida()
     {
-        var rejected = DeliveryResult.Failure("HTTP 400 número inválido", isTransient: false);
+        var rejected = DeliveryResult.Failure("HTTP 400 invalid number", isTransient: false);
         var provider = new ScriptedProvider(
             rejected, rejected, rejected, rejected, rejected, DeliveryResult.Success("ok"));
         var harness = new Harness(_datasetId, Columns)

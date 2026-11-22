@@ -33,7 +33,7 @@ internal sealed class FlowScheduleJsonConverter : JsonConverter<FlowSchedule>
 
         if (!Enum.IsDefined((ExecutionType)shape.Type))
         {
-            throw new JsonException($"Tipo de ejecución desconocido en jsonb: '{shape.Type}'.");
+            throw new JsonException($"Unknown execution type in jsonb: '{shape.Type}'.");
         }
 
         var zone = TimeZoneId.FromStored(shape.Zone);
@@ -41,11 +41,11 @@ internal sealed class FlowScheduleJsonConverter : JsonConverter<FlowSchedule>
         return shape.Type switch
         {
             (int)ExecutionType.OneTime => FlowSchedule.OneTime(
-                shape.RunAtUtc ?? throw new JsonException("El schedule OneTime carece de 'runAtUtc'."), zone),
+                shape.RunAtUtc ?? throw new JsonException("The OneTime schedule is missing 'runAtUtc'."), zone),
             (int)ExecutionType.Recurring => FlowSchedule.Recurring(ReadRecurrence(shape.Recurrence), zone),
             (int)ExecutionType.DataTriggered => FlowSchedule.DataTriggered(zone),
             (int)ExecutionType.Immediate => FlowSchedule.Immediate(zone),
-            _ => throw new JsonException($"Tipo de ejecución no soportado: '{shape.Type}'."),
+            _ => throw new JsonException($"Unsupported execution type: '{shape.Type}'."),
         };
     }
 
@@ -65,12 +65,12 @@ internal sealed class FlowScheduleJsonConverter : JsonConverter<FlowSchedule>
     {
         if (shape is null || !Enum.IsDefined((RecurrenceFrequency)shape.Frequency))
         {
-            throw new JsonException("La recurrencia persistida es inválida.");
+            throw new JsonException("The persisted recurrence is invalid.");
         }
 
         if (!TimeOnly.TryParseExact(shape.TimeOfDay, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var time))
         {
-            throw new JsonException($"Hora de recurrencia inválida: '{shape.TimeOfDay}'.");
+            throw new JsonException($"Invalid recurrence time: '{shape.TimeOfDay}'.");
         }
 
         return RecurrenceRule.Daily(time, shape.IntervalDays);
@@ -81,7 +81,7 @@ internal sealed class FlowScheduleJsonConverter : JsonConverter<FlowSchedule>
         if (!element.TryGetProperty(propertyName, out var property) || property.ValueKind != JsonValueKind.Number
             || !property.TryGetInt32(out var value))
         {
-            throw new JsonException($"Propiedad numérica requerida ausente: '{propertyName}'.");
+            throw new JsonException($"Required numeric property missing: '{propertyName}'.");
         }
 
         return value;
@@ -91,10 +91,10 @@ internal sealed class FlowScheduleJsonConverter : JsonConverter<FlowSchedule>
     {
         if (!element.TryGetProperty(propertyName, out var property) || property.ValueKind != JsonValueKind.String)
         {
-            throw new JsonException($"Propiedad de texto requerida ausente: '{propertyName}'.");
+            throw new JsonException($"Required text property missing: '{propertyName}'.");
         }
 
-        return property.GetString() ?? throw new JsonException($"Propiedad nula: '{propertyName}'.");
+        return property.GetString() ?? throw new JsonException($"Null property: '{propertyName}'.");
     }
 }
 
@@ -108,15 +108,15 @@ internal sealed class DataTriggerConfigJsonConverter : JsonConverter<DataTrigger
 
         var columnId = root.TryGetProperty("columnId", out var column) && column.ValueKind == JsonValueKind.String
             ? column.GetGuid()
-            : throw new JsonException("DataTrigger sin 'columnId'.");
+            : throw new JsonException("DataTrigger without 'columnId'.");
 
         var matchModeRaw = root.TryGetProperty("matchMode", out var mode) && mode.ValueKind == JsonValueKind.Number
             ? mode.GetInt32()
-            : throw new JsonException("DataTrigger sin 'matchMode'.");
+            : throw new JsonException("DataTrigger without 'matchMode'.");
 
         if (!Enum.IsDefined((DateTriggerMatchMode)matchModeRaw))
         {
-            throw new JsonException($"Modo de trigger desconocido: '{matchModeRaw}'.");
+            throw new JsonException($"Unknown trigger mode: '{matchModeRaw}'.");
         }
 
         return DataTriggerConfig.Create(columnId, (DateTriggerMatchMode)matchModeRaw);

@@ -22,7 +22,7 @@ internal sealed class MiniExcelReader(Stream stream) : IExcelReader
 
         if (!enumerator.MoveNext())
         {
-            throw new InvalidDatasetFileException("El archivo no contiene filas.");
+            throw new InvalidDatasetFileException("The file contains no rows.");
         }
 
         var firstRow = enumerator.Current;
@@ -98,7 +98,7 @@ internal sealed class MiniExcelReaderFactory : IExcelReaderFactory
 
         if (!stream.CanRead || !stream.CanSeek)
         {
-            throw new InvalidDatasetFileException("El stream del archivo debe ser legible y buscable.");
+            throw new InvalidDatasetFileException("The file stream must be readable and seekable.");
         }
 
         stream.Position = 0;

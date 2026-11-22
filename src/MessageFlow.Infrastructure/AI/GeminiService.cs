@@ -44,25 +44,25 @@ public sealed class GeminiOptions
     {
         if (string.IsNullOrWhiteSpace(ApiKey))
         {
-            throw new InvalidOperationException("Falta la configuración 'Gemini:ApiKey'.");
+            throw new InvalidOperationException("Missing configuration 'Gemini:ApiKey'.");
         }
 
         if (string.IsNullOrWhiteSpace(Model))
         {
-            throw new InvalidOperationException("Falta la configuración 'Gemini:Model'.");
+            throw new InvalidOperationException("Missing configuration 'Gemini:Model'.");
         }
 
         if (string.IsNullOrWhiteSpace(EmbeddingModel))
         {
-            throw new InvalidOperationException("Falta la configuración 'Gemini:EmbeddingModel'.");
+            throw new InvalidOperationException("Missing configuration 'Gemini:EmbeddingModel'.");
         }
 
         if (EmbeddingDimensions != MessageFlow.Domain.Datasets.DatasetRowEmbedding.VectorDimensions)
         {
             throw new InvalidOperationException(
-                $"'Gemini:EmbeddingDimensions' es {EmbeddingDimensions} pero la columna del vector es " +
+                $"'Gemini:EmbeddingDimensions' is {EmbeddingDimensions} but the vector column is " +
                 $"vector({MessageFlow.Domain.Datasets.DatasetRowEmbedding.VectorDimensions}). " +
-                "Cambiar el ancho exige una migración nueva y reindexar todos los datasets.");
+                "Changing the width requires a new migration and reindexing all datasets.");
         }
     }
 }

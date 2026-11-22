@@ -15,8 +15,8 @@ namespace MessageFlow.Application.Common;
 /// </summary>
 public sealed class SemanticIndexingInProgressException(Guid datasetId, string status)
     : DomainException(
-        $"El dataset todavía no está listo para búsqueda semántica (estado: {status}). " +
-        "Se indexa en segundo plano; intentá de nuevo en unos minutos.")
+        $"The dataset is not yet ready for semantic search (status: {status}). " +
+        "It is being indexed in the background; please try again in a few minutes.")
 {
     /// <summary>Código estable para el cliente. No depende del texto del mensaje.</summary>
     public const string ErrorCode = "semantic_search_indexing";

@@ -44,7 +44,7 @@ public sealed class FilterMatcher
         FilterGroup group => group.Composition == FilterCompositionOperator.And
             ? group.Conditions.All(child => Evaluate(child, row))
             : group.Conditions.Any(child => Evaluate(child, row)),
-        _ => throw new InvalidFilterStructureException("Tipo de nodo de filtro desconocido."),
+        _ => throw new InvalidFilterStructureException("Unknown filter node type."),
     };
 
     private bool EvaluateCondition(FilterCondition condition, IReadOnlyDictionary<string, string?> row)

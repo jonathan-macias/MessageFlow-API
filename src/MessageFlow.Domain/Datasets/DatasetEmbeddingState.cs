@@ -43,12 +43,12 @@ public sealed class DatasetEmbeddingState : AuditableEntity
     {
         if (datasetId == Guid.Empty)
         {
-            throw new DomainException("El estado de indexado debe pertenecer a un dataset.");
+            throw new DomainException("The indexing state must belong to a dataset.");
         }
 
         if (dimensions <= 0)
         {
-            throw new DomainException("El ancho del vector debe ser mayor que cero.");
+            throw new DomainException("The vector width must be greater than zero.");
         }
 
         DatasetId = datasetId;
@@ -125,8 +125,8 @@ public sealed class DatasetEmbeddingState : AuditableEntity
         if (Status != DatasetEmbeddingStatus.Ready)
         {
             throw new DomainException(
-                $"El dataset todavía no está listo para búsqueda semántica (estado: {Status}). " +
-                "Se indexa en segundo plano; intentá de nuevo en unos minutos.");
+                $"The dataset is not yet ready for semantic search (status: {Status}). " +
+                "It is being indexed in the background; please try again in a few minutes.");
         }
     }
 
@@ -135,8 +135,8 @@ public sealed class DatasetEmbeddingState : AuditableEntity
         if (Dimensions != DatasetRowEmbedding.VectorDimensions)
         {
             throw new DomainException(
-                $"El estado de indexado fue creado con {Dimensions} dimensiones pero la base de datos " +
-                $"usa {DatasetRowEmbedding.VectorDimensions}. Reindexá el dataset tras cambiar la configuración.");
+                $"The indexing state was created with {Dimensions} dimensions but the database " +
+                $"uses {DatasetRowEmbedding.VectorDimensions}. Reindex the dataset after changing the configuration.");
         }
     }
 

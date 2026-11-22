@@ -29,7 +29,7 @@ internal sealed class AccountService(
         if (!result.Succeeded)
         {
             var errors = string.Join("; ", result.Errors.Select(e => e.Description));
-            throw new Domain.Exceptions.DomainException($"Error al registrar usuario: {errors}");
+            throw new Domain.Exceptions.DomainException($"Failed to register user: {errors}");
         }
 
         // Asignar rol por defecto
@@ -88,7 +88,7 @@ internal sealed class AccountService(
             if (!linkResult.Succeeded)
             {
                 var linkErrors = string.Join("; ", linkResult.Errors.Select(e => e.Description));
-                throw new Domain.Exceptions.DomainException($"No se pudo enlazar la cuenta de {provider}: {linkErrors}");
+                throw new Domain.Exceptions.DomainException($"Could not link the {provider} account: {linkErrors}");
             }
 
             return (user.Id, user.Email!, false);
@@ -110,7 +110,7 @@ internal sealed class AccountService(
         if (!result.Succeeded)
         {
             var errors = string.Join("; ", result.Errors.Select(e => e.Description));
-            throw new Domain.Exceptions.DomainException($"Error al crear usuario desde {provider}: {errors}");
+            throw new Domain.Exceptions.DomainException($"Failed to create user from {provider}: {errors}");
         }
 
         var newLoginResult = await userManager.AddLoginAsync(user, loginInfo);
@@ -118,7 +118,7 @@ internal sealed class AccountService(
         if (!newLoginResult.Succeeded)
         {
             var loginErrors = string.Join("; ", newLoginResult.Errors.Select(e => e.Description));
-            throw new Domain.Exceptions.DomainException($"No se pudo enlazar la cuenta de {provider}: {loginErrors}");
+            throw new Domain.Exceptions.DomainException($"Could not link the {provider} account: {loginErrors}");
         }
 
         await userManager.AddToRoleAsync(user, "User");

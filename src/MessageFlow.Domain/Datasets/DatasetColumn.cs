@@ -28,17 +28,17 @@ public sealed class DatasetColumn : Entity
     {
         if (datasetId == Guid.Empty)
         {
-            throw new DomainException("La columna debe pertenecer a un dataset.");
+            throw new DomainException("The column must belong to a dataset.");
         }
 
         if (string.IsNullOrWhiteSpace(name))
         {
-            throw new InvalidDatasetFileException("El nombre de la columna no puede estar vacío.");
+            throw new InvalidDatasetFileException("The column name cannot be empty.");
         }
 
         if (ordinal < 0)
         {
-            throw new DomainException("La posición de la columna no puede ser negativa.");
+            throw new DomainException("The column position cannot be negative.");
         }
 
         DatasetId = datasetId;

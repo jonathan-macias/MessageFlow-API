@@ -46,7 +46,7 @@ public sealed class RequiresDockerFactAttribute : FactAttribute
     {
         if (!DockerAvailability.IsAvailable)
         {
-            Skip = "Docker no está disponible en este entorno; los tests de integración con PostgreSQL se ejecutan en CI.";
+            Skip = "Docker is not available in this environment; PostgreSQL integration tests run in CI.";
         }
     }
 }

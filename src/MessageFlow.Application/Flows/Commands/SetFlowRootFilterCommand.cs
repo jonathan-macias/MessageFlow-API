@@ -33,7 +33,7 @@ public sealed class FilterGroupRequestValidator : AbstractValidator<FilterGroupR
 
         RuleFor(x => x)
             .Must(g => (g.Conditions?.Count ?? 0) + (g.Groups?.Count ?? 0) > 0)
-            .WithMessage("Un grupo de filtros debe contener al menos una condición o subgrupo.");
+            .WithMessage("A filter group must contain at least one condition or subgroup.");
 
         RuleForEach(x => x.Conditions).NotNull().SetValidator(new FilterConditionRequestValidator());
         RuleForEach(x => x.Groups).NotNull().SetValidator(new FilterGroupRequestValidator());
@@ -50,7 +50,7 @@ public sealed class FilterConditionRequestValidator : AbstractValidator<FilterCo
         RuleFor(x => x.Value)
             .NotEmpty()
             .When(x => FilterOperatorPolicy.RequiresValue(x.Operator))
-            .WithMessage("La condición de filtro requiere un valor.");
+            .WithMessage("The filter condition requires a value.");
     }
 }
 

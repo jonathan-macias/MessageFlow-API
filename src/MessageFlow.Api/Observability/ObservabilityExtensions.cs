@@ -115,7 +115,7 @@ public static class ObservabilityExtensions
             // Solo para la demo: provocan incidentes R1 (5xx) y R2 (latencia) a voluntad.
             app.MapGet("/dev/fail", () =>
             {
-                throw new InvalidOperationException("Fallo simulado para probar Sentinel.");
+                throw new InvalidOperationException("Simulated failure to test Sentinel.");
             }).AllowAnonymous().ExcludeFromDescription();
 
             app.MapGet("/dev/slow", async (int? ms) =>

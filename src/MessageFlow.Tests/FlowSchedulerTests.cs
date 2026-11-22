@@ -174,7 +174,7 @@ public class FlowSchedulerTests
         Assert.Equal(1, processed);
         Assert.Equal(ExecutionStatus.Completed, healthyExecution.Status);
         Assert.Equal(ExecutionStatus.Failed, brokenExecution.Status);
-        Assert.Contains("columna destinataria", brokenExecution.ErrorMessage);
+        Assert.Contains("recipient column", brokenExecution.ErrorMessage);
     }
 
     // --------------------------------------------------------------------------

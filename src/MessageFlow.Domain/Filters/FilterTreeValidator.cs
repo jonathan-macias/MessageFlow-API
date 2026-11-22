@@ -24,7 +24,7 @@ public static class FilterTreeValidator
             if (!catalog.TryGetValue(condition.ColumnId, out var column))
             {
                 throw new DomainException(
-                    $"La condición de filtro referencia una columna inexistente en el dataset (columna '{condition.ColumnId}').");
+                    $"The filter condition references a column that does not exist in the dataset (column '{condition.ColumnId}').");
             }
 
             if (!FilterOperatorPolicy.IsAllowed(column.DataType, condition.Operator))

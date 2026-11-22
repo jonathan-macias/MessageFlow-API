@@ -23,7 +23,7 @@ internal sealed class EvolutionHealthCheck(
     {
         if (!Uri.TryCreate(options.BaseUrl, UriKind.Absolute, out var baseUri))
         {
-            return HealthCheckResult.Degraded("Evolution API no está configurada (EvolutionApi:BaseUrl).");
+            return HealthCheckResult.Degraded("Evolution API is not configured (EvolutionApi:BaseUrl).");
         }
 
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -38,7 +38,7 @@ internal sealed class EvolutionHealthCheck(
         }
         catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException)
         {
-            return HealthCheckResult.Degraded("Evolution API no responde.");
+            return HealthCheckResult.Degraded("Evolution API is not responding.");
         }
     }
 }

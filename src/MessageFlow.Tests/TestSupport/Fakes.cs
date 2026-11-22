@@ -232,7 +232,7 @@ public sealed class StubMessageProvider(HashSet<string>? failingDestinations = n
         Sent.Add((message.Recipient.DatasetRowId, message.Recipient.Destination, message.Body));
 
         return Task.FromResult(failingDestinations is not null && failingDestinations.Contains(message.Recipient.Destination)
-            ? DeliveryResult.Failure($"El número {message.Recipient.Destination} no está registrado en el proveedor.")
+            ? DeliveryResult.Failure($"Number {message.Recipient.Destination} is not registered with the provider.")
             : DeliveryResult.Success("stub-1"));
     }
 }
@@ -256,12 +256,12 @@ public sealed class FakeAccountService : IAccountService
     {
         if (ThrowOnRegister)
         {
-            throw new Domain.Exceptions.DomainException("Error al registrar usuario: El email ya está en uso.");
+            throw new Domain.Exceptions.DomainException("Failed to register user: The email is already in use.");
         }
 
         if (_users.ContainsKey(email.ToLowerInvariant()))
         {
-            throw new Domain.Exceptions.DomainException("Error al registrar usuario: El email ya está en uso.");
+            throw new Domain.Exceptions.DomainException("Failed to register user: The email is already in use.");
         }
 
         var userId = Guid.CreateVersion7();
@@ -315,7 +315,7 @@ public sealed class FakeGoogleTokenValidator : IGoogleTokenValidator
     {
         if (ShouldFail || ValidUser is null)
         {
-            throw new Domain.Exceptions.DomainException("Token de Google inválido.");
+            throw new Domain.Exceptions.DomainException("Invalid Google token.");
         }
 
         return Task.FromResult(ValidUser);

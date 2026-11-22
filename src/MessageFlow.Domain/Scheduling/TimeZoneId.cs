@@ -16,7 +16,7 @@ public readonly record struct TimeZoneId
     {
         if (string.IsNullOrWhiteSpace(value))
         {
-            throw new UnsupportedTimeZoneException("La zona horaria es obligatoria.");
+            throw new UnsupportedTimeZoneException("The time zone is required.");
         }
 
         var trimmed = value.Trim();
@@ -24,7 +24,7 @@ public readonly record struct TimeZoneId
         if (trimmed.Contains(' '))
         {
             throw new UnsupportedTimeZoneException(
-                $"La zona horaria '{trimmed}' no es un identificador IANA válido. Use por ejemplo 'America/Bogota'.");
+                $"The time zone '{trimmed}' is not a valid IANA identifier. Use, for example, 'America/Bogota'.");
         }
 
         try
@@ -33,11 +33,11 @@ public readonly record struct TimeZoneId
         }
         catch (TimeZoneNotFoundException)
         {
-            throw new UnsupportedTimeZoneException($"Zona horaria desconocida: '{trimmed}'.");
+            throw new UnsupportedTimeZoneException($"Unknown time zone: '{trimmed}'.");
         }
         catch (InvalidTimeZoneException)
         {
-            throw new UnsupportedTimeZoneException($"Zona horaria inválida: '{trimmed}'.");
+            throw new UnsupportedTimeZoneException($"Invalid time zone: '{trimmed}'.");
         }
 
         return new TimeZoneId(trimmed);
