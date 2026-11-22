@@ -63,11 +63,16 @@ public static class DependencyInjection
         services.AddScoped<ICurrentUser>(sp =>
         {
             var httpContextAccessor = sp.GetRequiredService<IHttpContextAccessor>();
-            if (httpContextAccessor.HttpContext?.User?.Identity?.IsAuthenticated == true)
+            var httpContext = httpContextAccessor.HttpContext;
+
+            if (httpContext?.User?.Identity?.IsAuthenticated == true)
             {
                 return new HttpContextCurrentUser(httpContextAccessor);
             }
-            return new SystemCurrentUser();
+
+            // Sin HttpContext es un proceso interno (scheduler, indexado). Con HttpContext pero sin
+            // usuario autenticado es una petición anónima: nunca debe ver datos de otros usuarios.
+            return httpContext is null ? new SystemCurrentUser() : new AnonymousCurrentUser();
         });
 
         // ASP.NET Core Identity: UserManager + SignInManager + roles + stores EF Core.
@@ -80,6 +85,11 @@ public static class DependencyInjection
             options.Password.RequireNonAlphanumeric = false;
             options.User.RequireUniqueEmail = true;
             options.SignIn.RequireConfirmedEmail = false;
+
+            // Bloqueo temporal tras intentos fallidos (se combina con el límite por IP del login).
+            options.Lockout.AllowedForNewUsers = true;
+            options.Lockout.MaxFailedAccessAttempts = 5;
+            options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
         })
         .AddEntityFrameworkStores<MessageFlowDbContext>()
         .AddDefaultTokenProviders();

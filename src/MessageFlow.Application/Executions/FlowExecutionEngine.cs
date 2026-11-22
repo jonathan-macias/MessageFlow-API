@@ -90,6 +90,7 @@ public sealed class FlowExecutionEngine(
             var pipeline = await BuildPipelineAsync(flow, cancellationToken);
 
             long cursorRowNumber = 0;
+            var consecutiveProviderFailures = 0;
             while (true)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -102,7 +103,29 @@ public sealed class FlowExecutionEngine(
                 foreach (var row in page)
                 {
                     cursorRowNumber = row.RowNumber;
-                    await ProcessRowAsync(execution, row, pipeline, processedAtUtc, cancellationToken);
+                    var outcome = await ProcessRowAsync(execution, row, pipeline, processedAtUtc, cancellationToken);
+
+                    // Un proveedor caído haría fallar cada fila (con su timeout): tras varios fallos
+                    // de infraestructura seguidos se detiene la corrida con un único error claro.
+                    // Un éxito o un rechazo propio del número demuestran que el proveedor responde.
+                    switch (outcome)
+                    {
+                        case RowOutcome.Sent or RowOutcome.Rejected:
+                            consecutiveProviderFailures = 0;
+                            break;
+
+                        case RowOutcome.ProviderUnavailable:
+                            consecutiveProviderFailures++;
+
+                            if (options.MaxConsecutiveProviderFailures > 0
+                                && consecutiveProviderFailures >= options.MaxConsecutiveProviderFailures)
+                            {
+                                throw new ProviderUnavailableException(
+                                    pipeline.Provider.Channel, consecutiveProviderFailures, row.RowNumber);
+                            }
+
+                            break;
+                    }
                 }
 
                 var endReached = page.Count < options.SaveBatchSize;
@@ -222,7 +245,7 @@ public sealed class FlowExecutionEngine(
             dataTrigger);
     }
 
-    private static async Task ProcessRowAsync(
+    private static async Task<RowOutcome> ProcessRowAsync(
         FlowExecution execution,
         DatasetRow row,
         RowPipeline pipeline,
@@ -234,7 +257,7 @@ public sealed class FlowExecutionEngine(
         // El trigger de datos (DataTriggered) es una condición adicional al filtro raíz.
         if (!pipeline.Matcher.Matches(row.Values))
         {
-            return;
+            return RowOutcome.NotApplicable;
         }
 
         if (pipeline.DataTrigger is { } trigger)
@@ -243,7 +266,7 @@ public sealed class FlowExecutionEngine(
 
             if (!trigger.Matcher.Matches(triggerCell, trigger.ReferenceDate))
             {
-                return;
+                return RowOutcome.NotApplicable;
             }
         }
 
@@ -251,7 +274,7 @@ public sealed class FlowExecutionEngine(
             || string.IsNullOrWhiteSpace(destination))
         {
             execution.RegisterSkipped(row.Id, $"Sin valor de destinatario en la columna '{pipeline.RecipientColumnName}'.", executedAtUtc);
-            return;
+            return RowOutcome.NotApplicable;
         }
 
         try
@@ -265,11 +288,11 @@ public sealed class FlowExecutionEngine(
             if (delivery.IsSuccess)
             {
                 execution.RegisterSuccess(row.Id, executedAtUtc);
+                return RowOutcome.Sent;
             }
-            else
-            {
-                execution.RegisterFailure(row.Id, delivery.Error ?? "El proveedor devolvió un error sin detalle.", executedAtUtc);
-            }
+
+            execution.RegisterFailure(row.Id, delivery.Error ?? "El proveedor devolvió un error sin detalle.", executedAtUtc);
+            return delivery.IsTransient ? RowOutcome.ProviderUnavailable : RowOutcome.Rejected;
         }
         catch (OperationCanceledException)
         {
@@ -279,7 +302,24 @@ public sealed class FlowExecutionEngine(
         {
             // Un registro problemático no detiene la corrida masiva.
             execution.RegisterFailure(row.Id, ex.Message, executedAtUtc);
+            return RowOutcome.Rejected;
         }
+    }
+
+    /// <summary>Resultado de procesar una fila, usado para detectar un proveedor caído.</summary>
+    private enum RowOutcome
+    {
+        /// <summary>Sin filtro, trigger o destinatario: no se intentó el envío.</summary>
+        NotApplicable,
+
+        /// <summary>El proveedor aceptó el mensaje.</summary>
+        Sent,
+
+        /// <summary>Falló por causa del mensaje o del número (el proveedor sí respondió).</summary>
+        Rejected,
+
+        /// <summary>Falló por infraestructura del proveedor (caído, sin configurar, sin red).</summary>
+        ProviderUnavailable,
     }
 
     /// <summary>Cierra la ejecución en un estado terminal tolerando fallos secundarios (p. ej. BD caída).</summary>

@@ -64,6 +64,10 @@ public sealed class GetDatasetColumnsQueryHandler(IDatasetRepository datasetRepo
 {
     public async Task<IReadOnlyList<ColumnDefinitionDto>> HandleAsync(GetDatasetColumnsQuery query, CancellationToken cancellationToken = default)
     {
+        // El repositorio de columnas no filtra por propietario: la propiedad se valida aquí.
+        _ = await datasetRepository.FindByIdAsync(query.DatasetId, cancellationToken)
+            ?? throw new NotFoundException("Dataset", query.DatasetId);
+
         var columns = await datasetRepository.GetColumnDefinitionsAsync(query.DatasetId, cancellationToken);
 
         return [.. columns.Select(c => new ColumnDefinitionDto(c.Id, c.Name, c.DataType))];

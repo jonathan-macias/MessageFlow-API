@@ -36,4 +36,10 @@ public sealed class FlowExecutionEngineOptions
 
     /// <summary>Filas procesadas por transacción de persistencia (memoria acotada).</summary>
     public int SaveBatchSize { get; init; } = 500;
+
+    /// <summary>
+    /// Fallos transitorios consecutivos del proveedor (caído, sin configurar, sin red) tras los
+    /// cuales se detiene la corrida como Failed. 0 desactiva el corte.
+    /// </summary>
+    public int MaxConsecutiveProviderFailures { get; init; } = 5;
 }

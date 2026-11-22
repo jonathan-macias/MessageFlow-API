@@ -1,4 +1,7 @@
+using System.Security.Cryptography;
+using System.Text;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 
@@ -29,10 +32,52 @@ public static class ObservabilityExtensions
                 .AddPrometheusExporter());
 
         services.AddHealthChecks()
-            .AddNpgSql(connectionString, name: "postgresql", timeout: TimeSpan.FromSeconds(3));
+            .AddNpgSql(connectionString, name: "postgresql", timeout: TimeSpan.FromSeconds(3))
+            // Evolution caída no tumba la app: se reporta Degraded (el /health sigue en 200).
+            .AddCheck<EvolutionHealthCheck>("evolution", failureStatus: HealthStatus.Degraded);
 
         return services;
     }
+
+    /// <summary>
+    /// /metrics no debe ser público. Las peticiones que llegan por el túnel de Cloudflare
+    /// (cabecera Cf-Connecting-Ip) solo pasan con la clave de operaciones; el scraping local,
+    /// directo al puerto del contenedor, sigue funcionando sin ella. Para conservar el acceso
+    /// público anterior, configurar Observability:PublicMetrics=true.
+    /// </summary>
+    public static WebApplication UseMessageFlowMetricsProtection(this WebApplication app)
+    {
+        var publicMetrics = app.Configuration.GetValue<bool>("Observability:PublicMetrics");
+        var opsKey = app.Configuration["Ops:ApiKey"];
+
+        if (publicMetrics)
+        {
+            return app;
+        }
+
+        app.Use(async (context, next) =>
+        {
+            var viaPublicTunnel = context.Request.Headers.ContainsKey("Cf-Connecting-Ip");
+
+            if (viaPublicTunnel
+                && context.Request.Path.StartsWithSegments("/metrics")
+                && !KeyMatches(context.Request.Headers[OpsKeyHeader].ToString(), opsKey))
+            {
+                context.Response.StatusCode = StatusCodes.Status404NotFound;
+                return;
+            }
+
+            await next();
+        });
+
+        return app;
+    }
+
+    private static bool KeyMatches(string provided, string? expected)
+        => !string.IsNullOrWhiteSpace(expected)
+            && CryptographicOperations.FixedTimeEquals(
+                Encoding.UTF8.GetBytes(provided),
+                Encoding.UTF8.GetBytes(expected));
 
     public static WebApplication MapMessageFlowObservability(this WebApplication app)
     {
@@ -55,7 +100,7 @@ public static class ObservabilityExtensions
         {
             app.MapGet("/ops/recent-errors", (HttpContext http, RecentErrorsBuffer buffer, int? minutes, int? max) =>
             {
-                if (http.Request.Headers[OpsKeyHeader] != opsKey)
+                if (!KeyMatches(http.Request.Headers[OpsKeyHeader].ToString(), opsKey))
                 {
                     return Results.Unauthorized();
                 }
