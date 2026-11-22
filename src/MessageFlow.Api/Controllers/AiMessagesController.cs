@@ -1,7 +1,9 @@
 using MessageFlow.Api.Contracts;
+using MessageFlow.Api.Security;
 using MessageFlow.Application.Abstractions.Messaging;
 using MessageFlow.Application.AI;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace MessageFlow.Api.Controllers;
 
@@ -11,6 +13,7 @@ namespace MessageFlow.Api.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/ai/messages")]
+[EnableRateLimiting(RateLimitPolicies.Ai)]
 public sealed class AiMessagesController(IDispatcher dispatcher) : ControllerBase
 {
     /// <summary>

@@ -119,7 +119,7 @@ public sealed class GeminiService(
         catch (HttpRequestException ex)
         {
             logger.LogError(ex, "Failed to call Gemini API.");
-            throw new DomainException($"Failed to communicate with AI service: {ex.Message}");
+            throw new DomainException("Failed to communicate with the AI service. Try again later.");
         }
         catch (TaskCanceledException)
         {
@@ -233,7 +233,7 @@ public sealed class GeminiService(
         {
             var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
             logger.LogError("Gemini API returned {StatusCode}: {Error}", response.StatusCode, errorContent);
-            throw new DomainException($"AI service returned {(int)response.StatusCode}: {errorContent}");
+            throw new DomainException(GeminiErrors.ToClientMessage(response.StatusCode));
         }
 
         var json = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
@@ -339,7 +339,7 @@ public sealed class GeminiService(
         catch (HttpRequestException ex)
         {
             logger.LogError(ex, "Failed to call Gemini API for dataset query.");
-            throw new DomainException($"Failed to communicate with AI service: {ex.Message}");
+            throw new DomainException("Failed to communicate with the AI service. Try again later.");
         }
         catch (TaskCanceledException)
         {
@@ -367,7 +367,7 @@ public sealed class GeminiService(
         catch (HttpRequestException ex)
         {
             logger.LogError(ex, "Failed to call Gemini API for response generation.");
-            throw new DomainException($"Failed to communicate with AI service: {ex.Message}");
+            throw new DomainException("Failed to communicate with the AI service. Try again later.");
         }
         catch (TaskCanceledException)
         {
@@ -644,7 +644,7 @@ public sealed class GeminiService(
         catch (HttpRequestException ex)
         {
             logger.LogError(ex, "Failed to call Gemini API for grounded response.");
-            throw new DomainException($"Failed to communicate with AI service: {ex.Message}");
+            throw new DomainException("Failed to communicate with the AI service. Try again later.");
         }
         catch (TaskCanceledException)
         {

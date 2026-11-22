@@ -17,6 +17,9 @@ public sealed class FakeCurrentUser : ICurrentUser
     public string? UserId { get; set; } = "00000000-0000-0000-0000-000000000001";
     public string? Email => UserId is null ? null : "test@example.com";
     public bool IsAuthenticated => UserId is not null;
+
+    /// <summary>UserId nulo equivale al contexto de sistema (scheduler/indexado): ve todo.</summary>
+    public bool IsSystem => UserId is null;
 }
 
 /// <summary>

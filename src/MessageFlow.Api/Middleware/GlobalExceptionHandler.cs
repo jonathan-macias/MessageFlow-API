@@ -36,7 +36,8 @@ internal sealed class GlobalExceptionHandler(
                 httpContext.Request.Path,
                 status,
                 exception.GetType().FullName ?? exception.GetType().Name,
-                exception.Message,
+                // El buffer lo consulta un tercero (Sentinel): se acota para no arrastrar datos de usuario.
+                exception.Message.Length > 300 ? exception.Message[..300] : exception.Message,
                 System.Diagnostics.Activity.Current?.TraceId.ToString()));
         }
 

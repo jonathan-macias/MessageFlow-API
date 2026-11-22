@@ -48,7 +48,9 @@ internal sealed class AccountService(
             return null;
         }
 
-        var result = await signInManager.CheckPasswordSignInAsync(user, password, lockoutOnFailure: false);
+        // lockoutOnFailure: cuenta los intentos fallidos y bloquea temporalmente la cuenta. Una cuenta
+        // bloqueada también devuelve null: el cliente ve el mismo 401 genérico, sin distinguir el motivo.
+        var result = await signInManager.CheckPasswordSignInAsync(user, password, lockoutOnFailure: true);
 
         if (!result.Succeeded)
         {
@@ -79,8 +81,16 @@ internal sealed class AccountService(
 
         if (user is not null)
         {
-            // Asociar el login externo al usuario existente
-            await userManager.AddLoginAsync(user, loginInfo);
+            // Asociar el login externo al usuario existente. Se conservan ambos métodos de
+            // acceso (contraseña y Google).
+            var linkResult = await userManager.AddLoginAsync(user, loginInfo);
+
+            if (!linkResult.Succeeded)
+            {
+                var linkErrors = string.Join("; ", linkResult.Errors.Select(e => e.Description));
+                throw new Domain.Exceptions.DomainException($"No se pudo enlazar la cuenta de {provider}: {linkErrors}");
+            }
+
             return (user.Id, user.Email!, false);
         }
 
@@ -103,7 +113,14 @@ internal sealed class AccountService(
             throw new Domain.Exceptions.DomainException($"Error al crear usuario desde {provider}: {errors}");
         }
 
-        await userManager.AddLoginAsync(user, loginInfo);
+        var newLoginResult = await userManager.AddLoginAsync(user, loginInfo);
+
+        if (!newLoginResult.Succeeded)
+        {
+            var loginErrors = string.Join("; ", newLoginResult.Errors.Select(e => e.Description));
+            throw new Domain.Exceptions.DomainException($"No se pudo enlazar la cuenta de {provider}: {loginErrors}");
+        }
+
         await userManager.AddToRoleAsync(user, "User");
 
         return (user.Id, user.Email!, true);

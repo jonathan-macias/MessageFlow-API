@@ -1,7 +1,9 @@
+using MessageFlow.Api.Security;
 using MessageFlow.Application.Abstractions.Messaging;
 using MessageFlow.Application.Auth;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace MessageFlow.Api.Controllers;
 
@@ -19,6 +21,7 @@ public sealed class AuthController(IDispatcher dispatcher) : ControllerBase
     /// </summary>
     [HttpPost("register")]
     [AllowAnonymous]
+    [EnableRateLimiting(RateLimitPolicies.AuthRegister)]
     [ProducesResponseType(typeof(RegisterUserResult), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Register([FromBody] RegisterUserCommand command, CancellationToken cancellationToken)
@@ -33,6 +36,7 @@ public sealed class AuthController(IDispatcher dispatcher) : ControllerBase
     /// </summary>
     [HttpPost("login")]
     [AllowAnonymous]
+    [EnableRateLimiting(RateLimitPolicies.AuthLogin)]
     [ProducesResponseType(typeof(LoginUserResult), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> Login([FromBody] LoginUserCommand command, CancellationToken cancellationToken)
@@ -47,6 +51,7 @@ public sealed class AuthController(IDispatcher dispatcher) : ControllerBase
     /// </summary>
     [HttpPost("google")]
     [AllowAnonymous]
+    [EnableRateLimiting(RateLimitPolicies.AuthLogin)]
     [ProducesResponseType(typeof(LoginUserResult), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> GoogleLogin([FromBody] GoogleLoginCommand command, CancellationToken cancellationToken)

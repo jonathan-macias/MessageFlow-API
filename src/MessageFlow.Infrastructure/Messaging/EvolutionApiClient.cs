@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using MessageFlow.Domain.Enums;
@@ -13,44 +14,70 @@ namespace MessageFlow.Infrastructure.Messaging;
 /// credenciales y timeout) — nada hardcodeado ni dependiente del wiring de DI.
 /// No conoce Flows, datasets ni plantillas — recibe el mensaje ya construido.
 ///
-/// Errores: cualquier fallo HTTP (red, timeout, 4xx/5xx) se traduce a
-/// DeliveryResult.Failure; el motor lo registra como resultado del registro y
-/// continúa con el resto de la corrida (patrón por-fila existente).
+/// Errores: ninguna condición (configuración ausente, red, timeout, 4xx/5xx) lanza una
+/// excepción al motor: todas se traducen a DeliveryResult.Failure y se registran en el log.
+/// Los fallos de infraestructura se marcan como transitorios para que el motor detenga la
+/// corrida si el proveedor está caído, en lugar de intentar cada fila. Los teléfonos se
+/// enmascaran en los logs.
 /// </summary>
 public sealed class EvolutionApiClient(
     HttpClient httpClient,
     EvolutionApiOptions options,
     ILogger<EvolutionApiClient> logger) : IMessageProvider
 {
+    private readonly bool _isConfigured = TryConfigure(httpClient, options);
+
     public Channel Channel => Channel.WhatsApp;
 
-    private HttpClient Http { get; } = Configure(httpClient, options);
-
-    private static HttpClient Configure(HttpClient httpClient, EvolutionApiOptions options)
+    /// <summary>
+    /// Devuelve false (sin lanzar) si falta configuración: así la aplicación arranca y el
+    /// scheduler sigue vivo aunque Evolution API no esté disponible o configurada.
+    /// </summary>
+    private static bool TryConfigure(HttpClient httpClient, EvolutionApiOptions options)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(options.BaseUrl);
+        if (string.IsNullOrWhiteSpace(options.BaseUrl)
+            || string.IsNullOrWhiteSpace(options.Instance)
+            || string.IsNullOrWhiteSpace(options.GlobalApiKey))
+        {
+            return false;
+        }
 
-        var baseUri = options.BaseUrl.TrimEnd().EndsWith('/')
-            ? new Uri(options.BaseUrl.TrimEnd())
-            : new Uri(options.BaseUrl.TrimEnd() + "/");
+        try
+        {
+            var baseUri = options.BaseUrl.TrimEnd().EndsWith('/')
+                ? new Uri(options.BaseUrl.TrimEnd())
+                : new Uri(options.BaseUrl.TrimEnd() + "/");
 
-        httpClient.BaseAddress = baseUri;
-        httpClient.Timeout = TimeSpan.FromSeconds(Math.Clamp(options.TimeoutSeconds, 1, 300));
+            httpClient.BaseAddress = baseUri;
+            httpClient.Timeout = TimeSpan.FromSeconds(Math.Clamp(options.TimeoutSeconds, 1, 300));
 
-        // Renueva el header para que reconfiguraciones de opciones no lo dupliquen.
-        httpClient.DefaultRequestHeaders.Remove("apiKey");
-        httpClient.DefaultRequestHeaders.Add("apiKey", options.GlobalApiKey);
+            // Renueva el header para que reconfiguraciones de opciones no lo dupliquen.
+            httpClient.DefaultRequestHeaders.Remove("apiKey");
+            httpClient.DefaultRequestHeaders.Add("apiKey", options.GlobalApiKey);
 
-        return httpClient;
+            return true;
+        }
+        catch (Exception ex) when (ex is UriFormatException or InvalidOperationException or FormatException)
+        {
+            return false;
+        }
     }
 
     public async Task<DeliveryResult> SendAsync(OutboundMessage message, CancellationToken cancellationToken = default)
     {
+        if (!_isConfigured)
+        {
+            logger.LogError(
+                "Evolution API no está configurada o su configuración es inválida (EvolutionApi:BaseUrl, Instance y GlobalApiKey).");
+            return DeliveryResult.Failure("Evolution API no está configurada.", isTransient: true);
+        }
+
+        var destination = PhoneMasker.Mask(message.Recipient.Destination);
         var endpoint = $"/message/sendText/{options.Instance}";
 
         try
         {
-            var response = await httpClient.PostAsJsonAsync(
+            using var response = await httpClient.PostAsJsonAsync(
                 endpoint,
                 new SendTextRequest(message.Recipient.Destination, message.Body),
                 cancellationToken);
@@ -58,38 +85,71 @@ public sealed class EvolutionApiClient(
             if (!response.IsSuccessStatusCode)
             {
                 var detail = await ReadErrorDetailAsync(response, cancellationToken);
-                logger.LogWarning(
-                    "Evolution API rechazó el envío a {Destination}: HTTP {StatusCode}. {Detail}",
-                    message.Recipient.Destination, (int)response.StatusCode, detail);
+                var transient = IsTransient(response.StatusCode);
 
-                return DeliveryResult.Failure($"HTTP {(int)response.StatusCode}{detail}");
+                logger.LogWarning(
+                    "Evolution API rechazó el envío a {Destination}: HTTP {StatusCode} ({FailureKind}).{Detail}",
+                    destination, (int)response.StatusCode, transient ? "transitorio" : "permanente",
+                    PhoneMasker.MaskDigits(detail));
+
+                return DeliveryResult.Failure($"HTTP {(int)response.StatusCode}{detail}", transient);
             }
 
-            return MapSuccess(await response.Content.ReadFromJsonAsync<JsonDocument>(cancellationToken: cancellationToken));
+            return await MapSuccessAsync(response, destination, cancellationToken);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            // Timeout del HttpClient (no cancelación del host): fallo del registro.
-            logger.LogWarning("Timeout enviando a {Destination} vía Evolution API.", message.Recipient.Destination);
-            return DeliveryResult.Failure("Timeout comunicándose con Evolution API.");
+            // Timeout del HttpClient (no cancelación del host): fallo transitorio.
+            logger.LogWarning("Timeout enviando a {Destination} vía Evolution API.", destination);
+            return DeliveryResult.Failure("Timeout comunicándose con Evolution API.", isTransient: true);
         }
         catch (HttpRequestException ex)
         {
-            logger.LogError(ex, "Fallo de red enviando a {Destination} vía Evolution API.", message.Recipient.Destination);
-            return DeliveryResult.Failure($"Fallo de red: {ex.Message}");
+            logger.LogError(ex, "Fallo de red enviando a {Destination} vía Evolution API.", destination);
+            return DeliveryResult.Failure($"Fallo de red: {ex.Message}", isTransient: true);
         }
     }
 
-    private static Domain.Messaging.DeliveryResult MapSuccess(JsonDocument? document)
-    {
-        // La respuesta exitosa incluye key.id como identificador del mensaje.
-        var providerMessageId = document?.RootElement.TryGetProperty("key", out var key) == true
-            && key.TryGetProperty("id", out var id)
-            && id.ValueKind == JsonValueKind.String
-                ? id.GetString()
-                : null;
+    /// <summary>
+    /// Proveedor caído o mal configurado (5xx, límite de uso, credenciales o instancia
+    /// inválidas) frente a un rechazo propio del mensaje o del número (resto de 4xx).
+    /// </summary>
+    private static bool IsTransient(HttpStatusCode status)
+        => (int)status >= 500
+            || status is HttpStatusCode.TooManyRequests
+                or HttpStatusCode.RequestTimeout
+                or HttpStatusCode.Unauthorized
+                or HttpStatusCode.Forbidden
+                or HttpStatusCode.NotFound;
 
-        return Domain.Messaging.DeliveryResult.Success(providerMessageId);
+    private async Task<DeliveryResult> MapSuccessAsync(
+        HttpResponseMessage response,
+        string maskedDestination,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var document = await response.Content.ReadFromJsonAsync<JsonDocument>(cancellationToken: cancellationToken);
+
+            // La respuesta exitosa incluye key.id como identificador del mensaje.
+            var providerMessageId = document?.RootElement.TryGetProperty("key", out var key) == true
+                && key.TryGetProperty("id", out var id)
+                && id.ValueKind == JsonValueKind.String
+                    ? id.GetString()
+                    : null;
+
+            return DeliveryResult.Success(providerMessageId);
+        }
+        catch (JsonException ex)
+        {
+            // El proveedor respondió 2xx: el mensaje probablemente salió. Marcarlo como fallo
+            // provocaría un reenvío duplicado, así que se registra el aviso y se da por entregado.
+            logger.LogWarning(ex,
+                "Evolution API respondió 2xx a {Destination} con un cuerpo ilegible; se considera enviado sin identificador.",
+                maskedDestination);
+
+            return DeliveryResult.Success(null);
+        }
     }
 
     private static async Task<string> ReadErrorDetailAsync(HttpResponseMessage response, CancellationToken cancellationToken)
