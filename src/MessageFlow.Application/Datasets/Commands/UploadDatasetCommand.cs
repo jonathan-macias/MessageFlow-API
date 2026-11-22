@@ -165,6 +165,11 @@ public sealed class UploadDatasetCommandHandler(
 
         foreach (var row in reader.ReadDataRows())
         {
+            if (IsBlankRow(row))
+            {
+                continue;
+            }
+
             sample.Add(row);
 
             if (sample.Count >= options.TypeInferenceSampleSize)
@@ -176,7 +181,11 @@ public sealed class UploadDatasetCommandHandler(
         return sample;
     }
 
-    /// <summary>Rinde primero las filas ya leídas para la muestra y luego continúa el streaming.</summary>
+    /// <summary>
+    /// Rinde primero las filas ya leídas para la muestra y luego continúa el streaming.
+    /// Las filas sin ningún dato se omiten: Excel suele devolver filas con formato pero vacías
+    /// al final de la hoja (o entre registros) y no son registros del dataset.
+    /// </summary>
     private static IEnumerable<IReadOnlyList<string?>> EnumerateAllRows(
         IExcelReader reader,
         IReadOnlyList<IReadOnlyList<string?>> alreadyBuffered)
@@ -188,8 +197,25 @@ public sealed class UploadDatasetCommandHandler(
 
         foreach (var row in reader.ReadDataRows())
         {
-            yield return row;
+            if (!IsBlankRow(row))
+            {
+                yield return row;
+            }
         }
+    }
+
+    /// <summary>Una fila está en blanco cuando todas sus celdas son nulas, vacías o solo espacios.</summary>
+    private static bool IsBlankRow(IReadOnlyList<string?> cells)
+    {
+        foreach (var cell in cells)
+        {
+            if (!string.IsNullOrWhiteSpace(cell))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private DatasetRow BuildRow(
